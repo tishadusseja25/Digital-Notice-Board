@@ -1,0 +1,15 @@
+node_modules/
+dist/
+build/
+coverage/
+.env
+.env.*
+!.env.example
+uploads/
+*.log
+*.dump
+.vscode/
+CLAUDE.md
+AGENTS.md
+.claude/
+docs/plans/
