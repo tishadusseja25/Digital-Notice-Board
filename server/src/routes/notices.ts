@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import type { Env } from "../config/env.js";
 import { wrap } from "../lib/asyncHandler.js";
 import { HttpError } from "../lib/errors.js";
 import { objectIdSchema } from "../lib/objectId.js";
@@ -9,6 +10,9 @@ import { NOTICE_STATUSES } from "../models/Notice.js";
 import * as noticeService from "../services/noticeService.js";
 
 const status = z.enum(NOTICE_STATUSES);
+const imageRef = z
+  .object({ fileId: objectIdSchema, alt: z.string().trim().min(1).max(120) })
+  .strict();
 const fields = {
   title: z.string().trim().min(1).max(120),
   body: z.string().trim().min(1).max(5000),
@@ -19,6 +23,8 @@ const fields = {
     .transform((s) => new Date(s))
     .nullable()
     .optional(),
+  // Hard ceiling; the configured MAX_IMAGES_PER_NOTICE is enforced in the service.
+  images: z.array(imageRef).max(10).optional(),
 };
 const createSchema = z.object({ ...fields, status: status.default("draft") }).strict();
 const updateSchema = z
@@ -35,7 +41,7 @@ const idParam = (id: string) => {
   return id;
 };
 
-export function noticeRoutes() {
+export function noticeRoutes(env: Env) {
   const router = Router();
   const staff = requireRole("committee", "admin");
 
@@ -51,9 +57,8 @@ export function noticeRoutes() {
     staff,
     validate(createSchema),
     wrap(async (req, res) => {
-      res
-        .status(201)
-        .json({ notice: await noticeService.createNotice(req.auth!, req.body, req.ip) });
+      const notice = await noticeService.createNotice(req.auth!, req.body, env, req.ip);
+      res.status(201).json({ notice });
     }),
   );
 
@@ -63,7 +68,7 @@ export function noticeRoutes() {
     validate(updateSchema),
     wrap(async (req, res) => {
       const id = idParam(req.params.id!);
-      res.json({ notice: await noticeService.updateNotice(id, req.auth!, req.body, req.ip) });
+      res.json({ notice: await noticeService.updateNotice(id, req.auth!, req.body, env, req.ip) });
     }),
   );
 
@@ -73,12 +78,8 @@ export function noticeRoutes() {
     validate(deleteQuery, "query"),
     wrap(async (req, res) => {
       const id = idParam(req.params.id!);
-      await noticeService.removeNotice(
-        id,
-        req.auth!,
-        req.query.mode as "archive" | "delete",
-        req.ip,
-      );
+      const mode = req.query.mode as "archive" | "delete";
+      await noticeService.removeNotice(id, req.auth!, mode, req.ip);
       res.status(204).end();
     }),
   );

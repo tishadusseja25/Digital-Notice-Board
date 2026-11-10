@@ -1,22 +1,18 @@
 import { Types } from "mongoose";
+import type { Env } from "../config/env.js";
+import { canManage, type Caller } from "../lib/access.js";
 import { HttpError } from "../lib/errors.js";
 import { isObjectId, paged } from "../lib/objectId.js";
 import { isPubliclyVisible } from "../lib/visibility.js";
 import { Category } from "../models/Category.js";
 import { Notice, type NoticeDoc, type NoticeStatus } from "../models/Notice.js";
-import type { Role } from "../models/User.js";
 import { audit } from "./auditService.js";
-
-export type Caller = { id: string; role: Role };
+import { attachImages, checkAttachable, deleteFiles, type ImageRef } from "./imageService.js";
 
 const notFound = () => new HttpError(404, "NOT_FOUND", "Notice not found");
 const forbidden = () => new HttpError(403, "FORBIDDEN", "You can only change your own notices");
 const invalid = (fields: Record<string, string>) =>
   new HttpError(400, "VALIDATION", "Invalid input", fields);
-
-/** Author or admin. This is the object-level check behind PRD Section 5 "Own only". */
-export const canManage = (notice: { authorId: Types.ObjectId }, caller?: Caller) =>
-  !!caller && (caller.role === "admin" || notice.authorId.toString() === caller.id);
 
 /** Loads a notice with its category name filled in, or null for a malformed/unknown id. */
 async function load(id: string): Promise<NoticeDoc | null> {
@@ -59,16 +55,24 @@ export type NoticeInput = {
   categoryId: string;
   status: NoticeStatus;
   expiresAt?: Date | null;
+  images?: ImageRef[];
 };
 
-export async function createNotice(caller: Caller, input: NoticeInput, ip?: string) {
+export async function createNotice(caller: Caller, input: NoticeInput, env: Env, ip?: string) {
   await assertCategory(input.categoryId);
   assertFuture(input.expiresAt);
+  const { images = [], ...fields } = input;
+  await checkAttachable(images, caller, null, env.MAX_IMAGES_PER_NOTICE);
   const notice = await Notice.create({
-    ...input,
+    ...fields,
+    images,
     authorId: caller.id,
     publishedAt: input.status === "published" ? new Date() : undefined,
   });
+  await attachImages(
+    images.map((i) => i.fileId),
+    notice._id,
+  );
   await notice.populate("categoryId", "name");
   await audit({
     actorId: caller.id,
@@ -91,10 +95,27 @@ export async function getNotice(id: string, caller?: Caller) {
 
 export type NoticePatch = Partial<Omit<NoticeInput, "expiresAt">> & { expiresAt?: Date | null };
 
-export async function updateNotice(id: string, caller: Caller, patch: NoticePatch, ip?: string) {
+export async function updateNotice(
+  id: string,
+  caller: Caller,
+  patch: NoticePatch,
+  env: Env,
+  ip?: string,
+) {
   const notice = await load(id);
   if (!notice) throw notFound();
   if (!canManage(notice, caller)) throw forbidden();
+
+  // Sending `images` replaces the whole list; images left out are deleted with their files.
+  const removedImages: string[] = [];
+  if (patch.images !== undefined) {
+    await checkAttachable(patch.images, caller, notice._id, env.MAX_IMAGES_PER_NOTICE);
+    const keep = new Set(patch.images.map((i) => i.fileId));
+    removedImages.push(
+      ...notice.images.map((i) => i.fileId.toString()).filter((fileId) => !keep.has(fileId)),
+    );
+    notice.set("images", patch.images);
+  }
 
   if (patch.categoryId !== undefined) {
     await assertCategory(patch.categoryId);
@@ -109,6 +130,11 @@ export async function updateNotice(id: string, caller: Caller, patch: NoticePatc
     notice.status = patch.status;
   }
   await notice.save();
+  await attachImages(
+    (patch.images ?? []).map((i) => i.fileId),
+    notice._id,
+  );
+  await deleteFiles(removedImages);
   await notice.populate("categoryId", "name");
   await audit({
     actorId: caller.id,
@@ -135,6 +161,7 @@ export async function removeNotice(
     await notice.save();
   } else {
     await notice.deleteOne();
+    await deleteFiles(notice.images.map((i) => i.fileId));
   }
   await audit({
     actorId: caller.id,

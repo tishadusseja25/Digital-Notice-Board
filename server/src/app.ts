@@ -8,6 +8,7 @@ import { rejectOperatorKeys, requireSameOrigin } from "./middleware/security.js"
 import { authRoutes } from "./routes/auth.js";
 import { categoryRoutes } from "./routes/categories.js";
 import { health } from "./routes/health.js";
+import { imageRoutes } from "./routes/images.js";
 import { meRoutes } from "./routes/me.js";
 import { noticeRoutes } from "./routes/notices.js";
 
@@ -30,7 +31,8 @@ export function createApp(env: Env) {
 
   app.use("/api/health", health);
   app.use("/api/auth", authRoutes(env, limiters));
-  app.use("/api/notices", noticeRoutes());
+  app.use("/api/notices", noticeRoutes(env));
+  app.use("/api/images", imageRoutes(env));
   app.use("/api/me", meRoutes());
   app.use("/api/categories", categoryRoutes());
   app.use("/api", notFound);
