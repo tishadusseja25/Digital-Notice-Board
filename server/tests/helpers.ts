@@ -26,6 +26,8 @@ export const PASSWORD = "correct-horse-battery";
 /** Connects this test file to its own database inside the shared in-memory MongoDB. */
 export async function connectTestDb() {
   await mongoose.connect(process.env.TEST_MONGO_URI!, { dbName: `t_${randomUUID().slice(0, 8)}` });
+  // Wait for indexes (unique emails, the text index) so tests never race the index build.
+  await Promise.all(Object.values(mongoose.models).map((m) => m.init()));
 }
 
 export async function clearTestDb() {

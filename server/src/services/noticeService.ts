@@ -1,9 +1,9 @@
-import { Types } from "mongoose";
+import { Types, trusted } from "mongoose";
 import type { Env } from "../config/env.js";
 import { canManage, type Caller } from "../lib/access.js";
 import { HttpError } from "../lib/errors.js";
 import { isObjectId, paged } from "../lib/objectId.js";
-import { isPubliclyVisible } from "../lib/visibility.js";
+import { isPubliclyVisible, publicNoticeFilter } from "../lib/visibility.js";
 import { Category } from "../models/Category.js";
 import { Notice, type NoticeDoc, type NoticeStatus } from "../models/Notice.js";
 import { audit } from "./auditService.js";
@@ -189,6 +189,45 @@ export async function listMine(
   ]);
   return paged(
     docs.map((d) => toDto(d, true)),
+    total,
+    opts.page,
+    opts.limit,
+  );
+}
+
+export type PublicListOptions = {
+  q?: string;
+  category?: string;
+  from?: Date;
+  to?: Date;
+  page: number;
+  limit: number;
+};
+
+/**
+ * The public board: only publicly visible notices, pinned first, then newest first.
+ * Search text reaches MongoDB only as the string inside $search, never as a query object.
+ */
+export async function listPublic(opts: PublicListOptions) {
+  const filter: Record<string, unknown> = publicNoticeFilter();
+  if (opts.category) filter.categoryId = opts.category;
+  if (opts.q) filter.$text = trusted({ $search: opts.q });
+  if (opts.from || opts.to) {
+    filter.publishedAt = trusted({
+      ...(opts.from && { $gte: opts.from }),
+      ...(opts.to && { $lte: opts.to }),
+    });
+  }
+  const [docs, total] = await Promise.all([
+    Notice.find(filter)
+      .sort({ pinned: -1, publishedAt: -1 })
+      .skip((opts.page - 1) * opts.limit)
+      .limit(opts.limit)
+      .populate("categoryId", "name"),
+    Notice.countDocuments(filter),
+  ]);
+  return paged(
+    docs.map((d) => toDto(d, false)),
     total,
     opts.page,
     opts.limit,
