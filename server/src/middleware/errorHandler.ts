@@ -10,7 +10,14 @@ export const notFound: RequestHandler = (_req, res) => {
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof HttpError) {
-    res.status(err.status).json({ error: { code: err.code, message: err.message } });
+    res
+      .status(err.status)
+      .json({ error: { code: err.code, message: err.message, fields: err.fields } });
+    return;
+  }
+  // Malformed JSON bodies surface as a body-parser error.
+  if (err?.type === "entity.parse.failed") {
+    res.status(400).json({ error: { code: "BAD_REQUEST", message: "Invalid JSON body" } });
     return;
   }
   logger.error({ err }, "unhandled error");

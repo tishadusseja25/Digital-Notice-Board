@@ -5,4 +5,4 @@ import { logger } from "./lib/logger.js";
 
 const env = loadEnv();
 await connectDb(env.MONGODB_URI);
-createApp().listen(env.PORT, () => logger.info(`server listening on port ${env.PORT}`));
+createApp(env).listen(env.PORT, () => logger.info(`server listening on port ${env.PORT}`));
