@@ -1,8 +1,13 @@
 import { Router } from "express";
+import { isDbHealthy } from "../db.js";
 
 export const health = Router();
 
-// M2 adds a database ping here; until a connection exists this only proves the process is up.
-health.get("/", (_req, res) => {
-  res.json({ status: "ok" });
+// Docker and the host use this to decide whether the app is alive, so it must check the database.
+health.get("/", async (_req, res) => {
+  if (await isDbHealthy()) {
+    res.json({ status: "ok" });
+  } else {
+    res.status(503).json({ status: "unavailable" });
+  }
 });

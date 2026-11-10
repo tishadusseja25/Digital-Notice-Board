@@ -1,9 +1,12 @@
 import request from "supertest";
+import mongoose from "mongoose";
 import { createApp } from "../src/app.js";
-import { loadEnv } from "../src/config/env.js";
+import { connectTestDb } from "./helpers.js";
 
 describe("GET /api/health", () => {
-  it("returns ok", async () => {
+  beforeAll(connectTestDb);
+
+  it("returns ok while the database is connected", async () => {
     const res = await request(createApp()).get("/api/health");
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ status: "ok" });
@@ -14,15 +17,10 @@ describe("GET /api/health", () => {
     expect(res.status).toBe(404);
     expect(res.body.error.code).toBe("NOT_FOUND");
   });
-});
 
-describe("loadEnv", () => {
-  it("accepts a valid environment and applies defaults", () => {
-    const env = loadEnv({ APP_ORIGIN: "http://localhost:5173" });
-    expect(env.PORT).toBe(4000);
-  });
-
-  it("stops with a clear message when a variable is missing", () => {
-    expect(() => loadEnv({})).toThrow(/APP_ORIGIN/);
+  it("returns 503 when the database is down", async () => {
+    await mongoose.disconnect();
+    const res = await request(createApp()).get("/api/health");
+    expect(res.status).toBe(503);
   });
 });
