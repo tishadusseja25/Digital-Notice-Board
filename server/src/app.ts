@@ -6,7 +6,10 @@ import { errorHandler, notFound } from "./middleware/errorHandler.js";
 import { createRateLimiters } from "./middleware/rateLimit.js";
 import { rejectOperatorKeys, requireSameOrigin } from "./middleware/security.js";
 import { authRoutes } from "./routes/auth.js";
+import { categoryRoutes } from "./routes/categories.js";
 import { health } from "./routes/health.js";
+import { meRoutes } from "./routes/me.js";
+import { noticeRoutes } from "./routes/notices.js";
 
 export function createApp(env: Env) {
   const app = express();
@@ -27,6 +30,9 @@ export function createApp(env: Env) {
 
   app.use("/api/health", health);
   app.use("/api/auth", authRoutes(env, limiters));
+  app.use("/api/notices", noticeRoutes());
+  app.use("/api/me", meRoutes());
+  app.use("/api/categories", categoryRoutes());
   app.use("/api", notFound);
   app.use(errorHandler);
   return app;

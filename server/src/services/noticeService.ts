@@ -1,0 +1,169 @@
+import { Types } from "mongoose";
+import { HttpError } from "../lib/errors.js";
+import { isObjectId, paged } from "../lib/objectId.js";
+import { isPubliclyVisible } from "../lib/visibility.js";
+import { Category } from "../models/Category.js";
+import { Notice, type NoticeDoc, type NoticeStatus } from "../models/Notice.js";
+import type { Role } from "../models/User.js";
+import { audit } from "./auditService.js";
+
+export type Caller = { id: string; role: Role };
+
+const notFound = () => new HttpError(404, "NOT_FOUND", "Notice not found");
+const forbidden = () => new HttpError(403, "FORBIDDEN", "You can only change your own notices");
+const invalid = (fields: Record<string, string>) =>
+  new HttpError(400, "VALIDATION", "Invalid input", fields);
+
+/** Author or admin. This is the object-level check behind PRD Section 5 "Own only". */
+export const canManage = (notice: { authorId: Types.ObjectId }, caller?: Caller) =>
+  !!caller && (caller.role === "admin" || notice.authorId.toString() === caller.id);
+
+/** Loads a notice with its category name filled in, or null for a malformed/unknown id. */
+async function load(id: string): Promise<NoticeDoc | null> {
+  if (!isObjectId(id)) return null;
+  return Notice.findById(id).populate("categoryId", "name");
+}
+
+/** Public shape hides author and status; staff (author/admin) also get those. */
+export function toDto(notice: NoticeDoc, staff: boolean) {
+  const category = notice.categoryId as unknown as { _id: Types.ObjectId; name: string };
+  return {
+    id: notice.id as string,
+    title: notice.title,
+    body: notice.body,
+    category: { id: category._id.toString(), name: category.name },
+    images: notice.images.map((i) => ({ id: i.fileId.toString(), alt: i.alt })),
+    pinned: notice.pinned,
+    publishedAt: notice.publishedAt ?? null,
+    expiresAt: notice.expiresAt ?? null,
+    createdAt: notice.createdAt,
+    updatedAt: notice.updatedAt,
+    ...(staff ? { status: notice.status, authorId: notice.authorId.toString() } : {}),
+  };
+}
+
+async function assertCategory(categoryId: string) {
+  if (!(await Category.exists({ _id: categoryId })))
+    throw invalid({ categoryId: "Unknown category" });
+}
+
+function assertFuture(expiresAt: Date | null | undefined) {
+  if (expiresAt && expiresAt.getTime() <= Date.now()) {
+    throw invalid({ expiresAt: "Expiry must be in the future" });
+  }
+}
+
+export type NoticeInput = {
+  title: string;
+  body: string;
+  categoryId: string;
+  status: NoticeStatus;
+  expiresAt?: Date | null;
+};
+
+export async function createNotice(caller: Caller, input: NoticeInput, ip?: string) {
+  await assertCategory(input.categoryId);
+  assertFuture(input.expiresAt);
+  const notice = await Notice.create({
+    ...input,
+    authorId: caller.id,
+    publishedAt: input.status === "published" ? new Date() : undefined,
+  });
+  await notice.populate("categoryId", "name");
+  await audit({
+    actorId: caller.id,
+    action: "notice.create",
+    targetType: "notice",
+    targetId: notice._id,
+    ip,
+  });
+  return toDto(notice, true);
+}
+
+/** Public notices are readable by anyone; others only by their author or an admin (404 for the rest). */
+export async function getNotice(id: string, caller?: Caller) {
+  const notice = await load(id);
+  if (!notice) throw notFound();
+  const staff = canManage(notice, caller);
+  if (!isPubliclyVisible(notice) && !staff) throw notFound();
+  return toDto(notice, staff);
+}
+
+export type NoticePatch = Partial<Omit<NoticeInput, "expiresAt">> & { expiresAt?: Date | null };
+
+export async function updateNotice(id: string, caller: Caller, patch: NoticePatch, ip?: string) {
+  const notice = await load(id);
+  if (!notice) throw notFound();
+  if (!canManage(notice, caller)) throw forbidden();
+
+  if (patch.categoryId !== undefined) {
+    await assertCategory(patch.categoryId);
+    notice.categoryId = new Types.ObjectId(patch.categoryId);
+  }
+  assertFuture(patch.expiresAt);
+  if (patch.title !== undefined) notice.title = patch.title;
+  if (patch.body !== undefined) notice.body = patch.body;
+  if (patch.expiresAt !== undefined) notice.expiresAt = patch.expiresAt;
+  if (patch.status !== undefined) {
+    if (patch.status === "published" && !notice.publishedAt) notice.publishedAt = new Date();
+    notice.status = patch.status;
+  }
+  await notice.save();
+  await notice.populate("categoryId", "name");
+  await audit({
+    actorId: caller.id,
+    action: "notice.update",
+    targetType: "notice",
+    targetId: notice._id,
+    ip,
+  });
+  return toDto(notice, true);
+}
+
+/** "archive" hides the notice but keeps it; "delete" removes it for good. */
+export async function removeNotice(
+  id: string,
+  caller: Caller,
+  mode: "archive" | "delete",
+  ip?: string,
+) {
+  const notice = await load(id);
+  if (!notice) throw notFound();
+  if (!canManage(notice, caller)) throw forbidden();
+  if (mode === "archive") {
+    notice.status = "archived";
+    await notice.save();
+  } else {
+    await notice.deleteOne();
+  }
+  await audit({
+    actorId: caller.id,
+    action: mode === "archive" ? "notice.archive" : "notice.delete",
+    targetType: "notice",
+    targetId: notice._id,
+    ip,
+  });
+}
+
+/** Committee sees their own notices in any status; admin sees everyone's. */
+export async function listMine(
+  caller: Caller,
+  opts: { status?: NoticeStatus; page: number; limit: number },
+) {
+  const filter: Record<string, unknown> = caller.role === "admin" ? {} : { authorId: caller.id };
+  if (opts.status) filter.status = opts.status;
+  const [docs, total] = await Promise.all([
+    Notice.find(filter)
+      .sort({ createdAt: -1 })
+      .skip((opts.page - 1) * opts.limit)
+      .limit(opts.limit)
+      .populate("categoryId", "name"),
+    Notice.countDocuments(filter),
+  ]);
+  return paged(
+    docs.map((d) => toDto(d, true)),
+    total,
+    opts.page,
+    opts.limit,
+  );
+}

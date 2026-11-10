@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import type { Env } from "../src/config/env.js";
 import { createApp } from "../src/app.js";
 import { hashPassword } from "../src/lib/password.js";
+import { Category } from "../src/models/Category.js";
 import { User, type Role } from "../src/models/User.js";
 
 export const testEnv: Env = {
@@ -16,6 +17,8 @@ export const testEnv: Env = {
   ACCESS_TOKEN_MINUTES: 15,
   REFRESH_TOKEN_DAYS: 7,
   BCRYPT_COST: 4, // minimum cost keeps tests fast; production uses 12
+  MAX_IMAGE_MB: 10,
+  MAX_IMAGES_PER_NOTICE: 5,
 };
 
 export const PASSWORD = "correct-horse-battery";
@@ -54,3 +57,22 @@ export function cookieValue(res: { headers: Record<string, unknown> }, name: str
   const hit = list.find((c) => c.startsWith(`${name}=`));
   return hit?.split(";")[0]?.slice(name.length + 1);
 }
+
+/** Creates a user and returns an agent that is already signed in as them. */
+export async function signedIn(email: string, role: Role = "committee") {
+  const user = await createUser(email, role);
+  const agent = makeAgent();
+  const res = await agent.post("/api/auth/login").send({ email, password: PASSWORD });
+  if (res.status !== 200) throw new Error(`test login failed: ${res.status}`);
+  return { agent, user };
+}
+
+export const createCategory = (name = "General") => Category.create({ name });
+
+export const noticeBody = (categoryId: string, extra: Record<string, unknown> = {}) => ({
+  title: "Exam timetable",
+  body: "The mid-semester exams start on Monday.",
+  categoryId,
+  status: "published",
+  ...extra,
+});
