@@ -5,6 +5,7 @@ import { wrap } from "../lib/asyncHandler.js";
 import { REFRESH_COOKIE, clearAuthCookies, setAuthCookies } from "../lib/cookies.js";
 import { HttpError } from "../lib/errors.js";
 import { requireRole } from "../middleware/auth.js";
+import type { Limiters } from "../middleware/rateLimit.js";
 import { validate } from "../middleware/validate.js";
 import * as authService from "../services/authService.js";
 
@@ -24,7 +25,7 @@ const refreshCookie = (cookies: Record<string, unknown> | undefined) => {
   return typeof value === "string" ? value : undefined;
 };
 
-export function authRoutes(env: Env) {
+export function authRoutes(env: Env, limiters: Limiters) {
   const router = Router();
 
   router.post(
@@ -32,7 +33,17 @@ export function authRoutes(env: Env) {
     validate(loginSchema),
     wrap(async (req, res) => {
       const { email, password } = req.body;
-      const result = await authService.login(email, password, req.ip, env);
+      // Failed attempts are counted per IP + email, so one attacker cannot lock out the real user.
+      const key = `${req.ip}|${email}`;
+      await limiters.login.check(key, res);
+      let result;
+      try {
+        result = await authService.login(email, password, req.ip, env);
+      } catch (err) {
+        if (err instanceof HttpError && err.status === 401) await limiters.login.fail(key);
+        throw err;
+      }
+      await limiters.login.reset(key);
       setAuthCookies(res, env, result.access, result.refresh);
       res.json({ user: result.user });
     }),
