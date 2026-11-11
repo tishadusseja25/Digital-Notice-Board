@@ -1,4 +1,21 @@
 services:
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    env_file: .env
+    # These differ inside the container, so they override whatever .env says for local development.
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      APP_ORIGIN: http://localhost:3000
+      MONGODB_URI: mongodb://noticeboard_app:${MONGO_APP_PASSWORD}@mongo:27017/noticeboard?authSource=noticeboard
+    ports:
+      - "3000:3000"
+    # The health check itself is defined in the Dockerfile (calls /api/health).
+
   mongo:
     image: mongo:7
     restart: unless-stopped
