@@ -476,16 +476,16 @@ Commits:
 
 ## 11. Definition of done
 
-- [ ] Every functional requirement (FR-01 to FR-24) met and verified.
-- [ ] Access control matrix (Section 5) enforced on the server (REST and sockets) and covered by tests.
-- [ ] All nine faculty checklist items (Section 2.1) demonstrable in the running app.
-- [ ] No secrets in the repository; `.env.example` present with placeholders only.
-- [ ] All tests pass; client and server builds succeed; Docker image builds and runs.
-- [ ] CI workflow file present and passing locally where possible.
-- [ ] App connects to MongoDB with the least-privilege `noticeboard_app` user.
-- [ ] No attribution or tool mentions anywhere in files or commit history.
-- [ ] No `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursorrules` or `.claude/` in the repository.
-- [ ] `git status` is clean; commits follow Section 0.1.
+- [x] Every functional requirement (FR-01 to FR-24) met and verified. (Automated tests plus a Chromium run on an in-memory database; not yet run against a real MongoDB server.)
+- [x] Access control matrix (Section 5) enforced on the server (REST and sockets) and covered by tests.
+- [ ] All nine faculty checklist items (Section 2.1) demonstrable in the running app. (Items 1 to 7 demonstrated in a browser; Docker and deployment are written but not yet run.)
+- [x] No secrets in the repository; `.env.example` present with placeholders only.
+- [ ] All tests pass; client and server builds succeed; Docker image builds and runs. (Tests and builds pass; the image has not been built because Docker was unavailable to the developer tooling.)
+- [x] CI workflow file present and passing locally where possible. (Every command it runs passes locally; the workflow itself has not run.)
+- [ ] App connects to MongoDB with the least-privilege `noticeboard_app` user. (Configured in `.env.example` and `scripts/mongo-init.js`; not yet run against that database.)
+- [x] No attribution or tool mentions anywhere in files or commit history. (The prohibited file names appear only in `.gitignore` and this document, as rules.)
+- [x] No `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursorrules` or `.claude/` in the repository.
+- [x] `git status` is clean; commits follow Section 0.1.
 
 ## 12. Assumptions and open questions
 
