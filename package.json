@@ -18,10 +18,13 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "seed": "tsx --env-file=.env scripts/seed-admin.ts",
-    "cleanup": "tsx --env-file=.env scripts/cleanup.ts"
+    "cleanup": "tsx --env-file=.env scripts/cleanup.ts",
+    "e2e": "npm run build && playwright test"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
     "@eslint/js": "^9.15.0",
+    "@playwright/test": "^1.65.0",
     "concurrently": "^10.0.7",
     "eslint": "^9.15.0",
     "globals": "^15.12.0",

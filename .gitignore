@@ -13,3 +13,6 @@ CLAUDE.md
 AGENTS.md
 .claude/
 docs/plans/
+
+playwright-report/
+test-results/
