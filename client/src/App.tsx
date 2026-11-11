@@ -11,6 +11,7 @@ import { useSessionStore } from "./store/sessionStore";
 // Staff pages are loaded on demand so the public board's download stays small.
 const CommitteeHome = lazy(() => import("./pages/committee/Home"));
 const NoticeEditor = lazy(() => import("./pages/committee/NoticeEditor"));
+const ChangePassword = lazy(() => import("./pages/account/ChangePassword"));
 const AdminHome = lazy(() => import("./pages/admin/Home"));
 
 export default function App() {
@@ -30,6 +31,9 @@ export default function App() {
           <Route index element={<CommitteeHome />} />
           <Route path="new" element={<NoticeEditor />} />
           <Route path=":id/edit" element={<NoticeEditor />} />
+        </Route>
+        <Route path="/account" element={<GuardedOutlet roles={["committee", "admin"]} />}>
+          <Route path="password" element={<ChangePassword />} />
         </Route>
         <Route
           path="/admin/*"

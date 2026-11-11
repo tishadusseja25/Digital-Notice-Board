@@ -14,6 +14,10 @@ export default function RouteGuard({ roles, children }: { roles: Role[]; childre
   if (status === "loading") return <p>Loading…</p>;
   if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   if (!roles.includes(user.role)) return <Forbidden />;
+  // A temporary password must be replaced first. This is a convenience in the interface only.
+  if (user.mustChangePassword && location.pathname !== "/account/password") {
+    return <Navigate to="/account/password" replace />;
+  }
   return <>{children}</>;
 }
 

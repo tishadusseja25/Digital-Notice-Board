@@ -24,6 +24,9 @@ export default function Layout() {
                 <Link to={area} className="underline">
                   {user.name}
                 </Link>
+                <Link to="/account/password" className="underline">
+                  Password
+                </Link>
                 <button
                   type="button"
                   onClick={() => void logout()}

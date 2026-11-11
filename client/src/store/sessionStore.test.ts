@@ -56,4 +56,21 @@ describe("sessionStore", () => {
       .catch(() => undefined);
     expect(useSessionStore.getState().user).toBeNull();
   });
+
+  it("changePassword() clears the must-change flag without another request", async () => {
+    useSessionStore.setState({ user: { ...user, mustChangePassword: true }, status: "ready" });
+    const fetchMock = stubFetch(() => json(204));
+    await useSessionStore.getState().changePassword("old", "a-long-new-password");
+    expect(useSessionStore.getState().user?.mustChangePassword).toBe(false);
+    expect(calls(fetchMock)).toEqual(["POST /api/auth/password"]);
+  });
+
+  it("changePassword() keeps the flag when the server refuses", async () => {
+    useSessionStore.setState({ user: { ...user, mustChangePassword: true }, status: "ready" });
+    stubFetch(() => json(400, { error: { code: "VALIDATION", message: "Invalid input" } }));
+    await expect(
+      useSessionStore.getState().changePassword("bad", "a-long-new-password"),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(useSessionStore.getState().user?.mustChangePassword).toBe(true);
+  });
 });

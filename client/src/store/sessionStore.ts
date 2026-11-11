@@ -17,9 +17,10 @@ type SessionState = {
   init: () => Promise<void>;
   login: (email: string, password: string) => Promise<User>;
   logout: () => Promise<void>;
+  changePassword: (current: string, next: string) => Promise<void>;
 };
 
-export const useSessionStore = create<SessionState>((set) => ({
+export const useSessionStore = create<SessionState>((set, get) => ({
   user: null,
   status: "loading",
 
@@ -39,6 +40,13 @@ export const useSessionStore = create<SessionState>((set) => ({
     });
     set({ user, status: "ready" });
     return user;
+  },
+
+  async changePassword(current, next) {
+    await api("/auth/password", { method: "POST", body: { current, next } });
+    // The server cleared the flag; mirror it without another request.
+    const user = get().user;
+    if (user) set({ user: { ...user, mustChangePassword: false } });
   },
 
   async logout() {
