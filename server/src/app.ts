@@ -11,6 +11,7 @@ import { health } from "./routes/health.js";
 import { imageRoutes } from "./routes/images.js";
 import { meRoutes } from "./routes/me.js";
 import { noticeRoutes } from "./routes/notices.js";
+import { userRoutes } from "./routes/users.js";
 
 export function createApp(env: Env) {
   const app = express();
@@ -35,6 +36,7 @@ export function createApp(env: Env) {
   app.use("/api/images", imageRoutes(env));
   app.use("/api/me", meRoutes());
   app.use("/api/categories", categoryRoutes());
+  app.use("/api/users", userRoutes(env));
   app.use("/api", notFound);
   app.use(errorHandler);
   return app;
