@@ -7,6 +7,7 @@ import { HttpError } from "../lib/errors.js";
 export const LIMITS = {
   publicReadsPerMinute: 120,
   writesPerMinute: 30,
+  socketConnectionsPerMinute: 20,
   loginFailures: 5,
   loginWindowSeconds: 15 * 60,
 };
