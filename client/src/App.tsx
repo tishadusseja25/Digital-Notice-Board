@@ -1,7 +1,8 @@
-import { Suspense, lazy, useEffect } from "react";
+import { lazy, useEffect } from "react";
 import { Route, Routes } from "react-router-dom";
+import AdminNav from "./components/AdminNav";
 import Layout from "./components/Layout";
-import RouteGuard, { GuardedOutlet } from "./components/RouteGuard";
+import { GuardedOutlet } from "./components/RouteGuard";
 import Board from "./pages/Board";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
@@ -13,6 +14,8 @@ const CommitteeHome = lazy(() => import("./pages/committee/Home"));
 const NoticeEditor = lazy(() => import("./pages/committee/NoticeEditor"));
 const ChangePassword = lazy(() => import("./pages/account/ChangePassword"));
 const AdminHome = lazy(() => import("./pages/admin/Home"));
+const AdminUsers = lazy(() => import("./pages/admin/Users"));
+const AdminCategories = lazy(() => import("./pages/admin/Categories"));
 
 export default function App() {
   const init = useSessionStore((s) => s.init);
@@ -20,7 +23,6 @@ export default function App() {
     void init();
   }, [init]);
 
-  const loading = <p>Loading…</p>;
   return (
     <Routes>
       <Route element={<Layout />}>
@@ -35,16 +37,13 @@ export default function App() {
         <Route path="/account" element={<GuardedOutlet roles={["committee", "admin"]} />}>
           <Route path="password" element={<ChangePassword />} />
         </Route>
-        <Route
-          path="/admin/*"
-          element={
-            <RouteGuard roles={["admin"]}>
-              <Suspense fallback={loading}>
-                <AdminHome />
-              </Suspense>
-            </RouteGuard>
-          }
-        />
+        <Route path="/admin" element={<GuardedOutlet roles={["admin"]} />}>
+          <Route element={<AdminNav />}>
+            <Route index element={<AdminHome />} />
+            <Route path="users" element={<AdminUsers />} />
+            <Route path="categories" element={<AdminCategories />} />
+          </Route>
+        </Route>
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
