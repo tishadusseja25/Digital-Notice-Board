@@ -17,14 +17,22 @@ const renderApp = () =>
 
 describe("App shell", () => {
   it("shows the site name and a Sign in link to a visitor", async () => {
-    stubFetch(() => json(401, { error: { code: "UNAUTHENTICATED", message: "x" } }));
+    stubFetch((url) =>
+      url.startsWith("/api/auth")
+        ? json(401, { error: { code: "UNAUTHENTICATED", message: "x" } })
+        : json(200, { items: [], total: 0, page: 1, limit: 20 }),
+    );
     renderApp();
     expect(screen.getByRole("link", { name: /digital notice board/i })).toBeInTheDocument();
     expect(await screen.findByRole("link", { name: /sign in/i })).toBeInTheDocument();
   });
 
   it("shows the user's name and a Sign out button when signed in", async () => {
-    stubFetch(() => json(200, { user }));
+    stubFetch((url) =>
+      url === "/api/auth/me"
+        ? json(200, { user })
+        : json(200, { items: [], total: 0, page: 1, limit: 20 }),
+    );
     renderApp();
     expect(await screen.findByRole("button", { name: /sign out/i })).toBeInTheDocument();
     await waitFor(() =>

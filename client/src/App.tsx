@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout";
+import Board from "./pages/Board";
 import { useSessionStore } from "./store/sessionStore";
 
 export default function App() {
@@ -12,7 +13,7 @@ export default function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route path="/" element={<h1 className="text-2xl font-bold">Latest notices</h1>} />
+        <Route path="/" element={<Board />} />
       </Route>
     </Routes>
   );
