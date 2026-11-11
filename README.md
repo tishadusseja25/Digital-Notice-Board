@@ -68,7 +68,7 @@ Render's free tier sleeps after about 15 minutes without visits, so the first vi
 
 ## Backup, restore and cleanup
 
-Everything (users, notices, images, audit log) is in one MongoDB database, so one backup covers it. With the Docker setup, using the read-only database user `noticeboard_ro` (password `MONGO_RO_PASSWORD` in `.env`):
+Everything (users, notices, images, audit log) is in one MongoDB database, so one backup covers it. In Git Bash on Windows, first run `export MSYS_NO_PATHCONV=1`, otherwise it rewrites the `/tmp/...` paths below into Windows paths and the commands fail. With the Docker setup, using the read-only database user `noticeboard_ro` (password `MONGO_RO_PASSWORD` in `.env`):
 
 ```sh
 mkdir -p backups
@@ -87,7 +87,7 @@ docker compose exec mongo mongorestore --username nb_admin --password "<MONGO_AD
   --authenticationDatabase admin --gzip --archive=/tmp/nb.gz --drop --nsInclude "noticeboard.*"
 ```
 
-Then open the board to check the notices and images are back. The backup and restore commands have not been run yet on this project (Docker was not available when they were written); try them once before you rely on them.
+Then open the board to check the notices and images are back. The backup and restore were run once against the Docker database (notice, image chunks and users came back identical); try them yourself once before you rely on them.
 
 **Cleanup.** `npm run cleanup` deletes notices that expired more than a year ago (with their images) and uploaded images that were never attached to a notice and are over a day old. It deletes data for good, so take a backup first and preview with `npm run cleanup -- --dry-run`. It reads `MONGODB_URI` from `.env`, so it runs from a computer that can reach the database, not inside the container. Run it about once a month.
 
@@ -114,7 +114,7 @@ Before you start: `docker compose up -d mongo`, `npm run seed`, `npm run dev`; h
 - Photo location data inside uploaded images is kept, because images are stored exactly as uploaded.
 - One server instance only (live updates are held in memory). Several copies would need a shared message store such as Redis.
 - Automatic accessibility checks pass on every main page, but nobody has yet tested with a screen reader or by keyboard alone; do that before relying on it.
-- The Docker image, the Docker run commands and the pipeline were written without Docker or GitHub available on the development machine and have not been run.
+- The GitHub Actions pipeline has not run yet, because the repository has no remote. The Docker image and `docker compose up --build` have been built and run (244 MB, runs as the `node` user, both services healthy).
 
 ## Troubleshooting
 
