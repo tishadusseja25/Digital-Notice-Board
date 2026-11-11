@@ -12,6 +12,8 @@ const schema = z.object({
   REFRESH_TOKEN_DAYS: z.coerce.number().int().min(1).max(30).default(7),
   BCRYPT_COST: z.coerce.number().int().min(4).max(15).default(12),
   MAX_IMAGE_MB: z.coerce.number().int().min(1).max(50).default(10),
+  // Folder with the built website. Set only in the Docker image; unset in development and tests.
+  CLIENT_DIST: z.string().min(1).optional(),
   MAX_IMAGES_PER_NOTICE: z.coerce.number().int().min(1).max(10).default(5),
 });
 
