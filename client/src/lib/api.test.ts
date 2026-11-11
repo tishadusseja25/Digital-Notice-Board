@@ -26,6 +26,16 @@ describe("api()", () => {
     expect(init?.headers).toEqual({ "Content-Type": "application/json" });
   });
 
+  it("sends a file upload as is, without forcing a JSON content type", async () => {
+    const fetchMock = stubFetch(() => json(201, { fileId: "f1" }));
+    const form = new FormData();
+    form.append("alt", "A picture");
+    await api("/images", { method: "POST", body: form });
+    const init = fetchMock.mock.calls[0]?.[1];
+    expect(init?.body).toBe(form);
+    expect(init?.headers).toBeUndefined();
+  });
+
   it("returns undefined for 204", async () => {
     stubFetch(() => json(204));
     expect(await api("/auth/logout", { method: "POST" })).toBeUndefined();

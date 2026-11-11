@@ -43,13 +43,21 @@ const buildUrl = (path: string, query: Options["query"]) => {
   return `/api${path}${qs ? `?${qs}` : ""}`;
 };
 
-const send = (path: string, opts: Options) =>
-  fetch(buildUrl(path, opts.query), {
+// A FormData body (file upload) goes out as is: the browser sets its own multipart content type.
+const send = (path: string, opts: Options) => {
+  const isForm = opts.body instanceof FormData;
+  return fetch(buildUrl(path, opts.query), {
     method: opts.method ?? "GET",
     credentials: "same-origin",
-    headers: opts.body === undefined ? undefined : { "Content-Type": "application/json" },
-    body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+    headers: opts.body === undefined || isForm ? undefined : { "Content-Type": "application/json" },
+    body:
+      opts.body === undefined
+        ? undefined
+        : isForm
+          ? (opts.body as FormData)
+          : JSON.stringify(opts.body),
   });
+};
 
 // Sign-in and refresh answer 401 for ordinary reasons; retrying them would loop.
 const NO_REFRESH = new Set(["/auth/login", "/auth/refresh"]);

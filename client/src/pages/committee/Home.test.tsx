@@ -54,6 +54,14 @@ describe("My notices", () => {
     expect(await screen.findByRole("heading", { name: "Notice 1" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Notice 1" })).toHaveAttribute("href", "/notices/id1");
     expect(screen.getByText("draft")).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Edit" })[0]).toHaveAttribute(
+      "href",
+      "/committee/id1/edit",
+    );
+    expect(screen.getByRole("link", { name: "New notice" })).toHaveAttribute(
+      "href",
+      "/committee/new",
+    );
     expect(screen.getAllByText("Exams")).toHaveLength(2);
   });
 

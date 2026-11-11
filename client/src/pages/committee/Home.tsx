@@ -85,6 +85,12 @@ export default function CommitteeHome() {
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">My notices</h1>
+        <Link
+          to="/committee/new"
+          className="rounded bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-700"
+        >
+          New notice
+        </Link>
       </div>
       {saved && (
         <p
@@ -150,6 +156,9 @@ export default function CommitteeHome() {
                   {n.expiresAt && ` · Expires ${formatDateTime(n.expiresAt)}`}
                 </p>
                 <div className="flex flex-wrap gap-2">
+                  <Link to={`/committee/${n.id}/edit`} className={button}>
+                    Edit
+                  </Link>
                   {confirming ? (
                     <>
                       <button
