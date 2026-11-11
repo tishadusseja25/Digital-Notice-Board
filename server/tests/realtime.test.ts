@@ -220,6 +220,27 @@ describe("live notice events", () => {
     expect(t.anon[4]).toEqual({ event: "notice:removed", data: { id: id2 } });
   });
 
+  it("sends changes to an archived notice only to its author and admins", async () => {
+    const t = await setup();
+    const id = (await t.annApi.post("/api/notices").send(noticeBody(t.categoryId))).body.notice.id;
+    await waitFor(t.anon, 1);
+    await t.annApi.delete(`/api/notices/${id}`).query({ mode: "archive" });
+    await waitFor(t.anon, 2);
+    // The public only learns that it is gone (an id, no content).
+    expect(t.anon[1]).toEqual({ event: "notice:removed", data: { id } });
+    for (const got of [t.anon, t.bob, t.ann, t.root]) got.length = 0;
+
+    await t.annApi.patch(`/api/notices/${id}`).send({ title: "Edited while archived" });
+    await waitFor(t.ann, 1);
+    await waitFor(t.root, 1);
+    await sleep(150);
+    expect(names(t.ann)).toEqual(["notice:changed"]);
+    expect(names(t.root)).toEqual(["notice:changed"]);
+    expect(t.ann[0]!.data.status).toBe("archived");
+    expect(t.anon).toEqual([]);
+    expect(t.bob).toEqual([]);
+  });
+
   it("announces unpublishing as a removal and republishing as a creation", async () => {
     const t = await setup();
     const id = (await t.annApi.post("/api/notices").send(noticeBody(t.categoryId))).body.notice.id;
