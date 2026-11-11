@@ -1,6 +1,7 @@
 import path from "node:path";
 import cookieParser from "cookie-parser";
 import express from "express";
+import helmet from "helmet";
 import type { Env } from "./config/env.js";
 import { authenticate } from "./middleware/auth.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
@@ -20,6 +21,36 @@ export function createApp(env: Env) {
   const limiters = createRateLimiters();
 
   app.disable("x-powered-by");
+
+  // Safe-by-default headers on every answer. The client has no inline scripts or styles, so the
+  // policy allows only the app's own files. WebSocket addresses are spelled out because some
+  // browsers do not count 'self' as covering ws/wss.
+  const origin = new URL(env.APP_ORIGIN);
+  const socketOrigin = `${origin.protocol === "https:" ? "wss" : "ws"}://${origin.host}`;
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          "default-src": ["'self'"],
+          "script-src": ["'self'"],
+          // Helmet's default would also allow inline styles; the built page uses none.
+          "style-src": ["'self'"],
+          "font-src": ["'self'"],
+          "img-src": ["'self'", "data:"],
+          "connect-src": ["'self'", socketOrigin],
+          "object-src": ["'none'"],
+          "frame-ancestors": ["'none'"],
+          "base-uri": ["'self'"],
+          "form-action": ["'self'"],
+          // Off on purpose: on plain http://localhost (the Docker demo) it would make the browser
+          // fetch scripts over https and break the page. Render's HSTS covers the real site.
+          "upgrade-insecure-requests": null,
+        },
+      },
+      hsts: env.NODE_ENV === "production",
+      frameguard: { action: "deny" },
+    }),
+  );
   // Behind Render's single proxy, req.ip must be the visitor, not the proxy, or every visitor
   // would share one rate-limit bucket. Never trust forwarded headers when there is no proxy.
   if (env.NODE_ENV === "production") app.set("trust proxy", 1);
