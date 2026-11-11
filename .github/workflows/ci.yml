@@ -13,18 +13,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: npm
       - run: npm ci
       # The server tests download a throwaway MongoDB once; keep it between runs.
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: node_modules/.cache/mongodb-memory-server
           key: mongodb-binary-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       - run: npm run lint
+      # Fails the pipeline on high or critical findings in what ships (PRD Section 7).
+      - run: npm audit --omit=dev --audit-level=high
       - name: Type check
         run: |
           npx tsc -p server/tsconfig.json --noEmit
@@ -32,8 +34,29 @@ jobs:
       - run: npm test
       - run: npm run build
 
-  image:
+  e2e:
     needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            node_modules/.cache/mongodb-memory-server
+            ~/.cache/ms-playwright
+          key: e2e-binaries-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - run: npx playwright install --with-deps chromium
+      # Builds both apps, starts the production build on a throwaway database, drives Chromium.
+      - run: npm run e2e
+
+  image:
+    needs: [check, e2e]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -42,17 +65,17 @@ jobs:
     env:
       PUBLISH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       # Registry names must be lowercase.
       - run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         if: env.PUBLISH == 'true'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       # Every run builds the image (so a broken Dockerfile fails the pipeline); only main pushes it.
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           push: ${{ env.PUBLISH == 'true' }}
