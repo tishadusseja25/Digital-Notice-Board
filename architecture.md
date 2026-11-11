@@ -343,6 +343,8 @@ SEED_ADMIN_EMAIL=admin@example.com
 SEED_ADMIN_PASSWORD=CHANGE_ME_STRONG
 MONGO_ADMIN_PASSWORD=CHANGE_ME_ADMIN         # used only by docker-compose
 MONGO_APP_PASSWORD=CHANGE_ME_APP
+MONGO_RO_PASSWORD=CHANGE_ME_RO               # read-only user for backups and reporting
+CLIENT_DIST=/app/client/dist                 # set inside the Docker image only: the built website the server serves
 VITE_API_BASE=/api                           # client API path (proxied in dev)
 ```
 
