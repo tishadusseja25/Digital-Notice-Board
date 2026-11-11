@@ -17,7 +17,8 @@
     "test": "npm test --workspaces --if-present",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "seed": "tsx --env-file=.env scripts/seed-admin.ts"
+    "seed": "tsx --env-file=.env scripts/seed-admin.ts",
+    "cleanup": "tsx --env-file=.env scripts/cleanup.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.15.0",
