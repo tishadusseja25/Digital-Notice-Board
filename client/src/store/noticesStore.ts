@@ -12,6 +12,9 @@ export type Notice = {
   expiresAt: string | null;
   createdAt: string;
   updatedAt: string;
+  // Only present for the author and admins.
+  status?: "draft" | "published" | "archived";
+  authorId?: string;
 };
 export type Category = { id: string; name: string };
 export type BoardQuery = {

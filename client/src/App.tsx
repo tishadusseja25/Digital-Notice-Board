@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect } from "react";
 import { Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout";
-import RouteGuard from "./components/RouteGuard";
+import RouteGuard, { GuardedOutlet } from "./components/RouteGuard";
 import Board from "./pages/Board";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
@@ -25,16 +25,9 @@ export default function App() {
         <Route path="/" element={<Board />} />
         <Route path="/notices/:id" element={<NoticeDetail />} />
         <Route path="/login" element={<Login />} />
-        <Route
-          path="/committee/*"
-          element={
-            <RouteGuard roles={["committee", "admin"]}>
-              <Suspense fallback={loading}>
-                <CommitteeHome />
-              </Suspense>
-            </RouteGuard>
-          }
-        />
+        <Route path="/committee" element={<GuardedOutlet roles={["committee", "admin"]} />}>
+          <Route index element={<CommitteeHome />} />
+        </Route>
         <Route
           path="/admin/*"
           element={

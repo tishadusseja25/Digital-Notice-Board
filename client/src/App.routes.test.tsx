@@ -62,7 +62,7 @@ describe("route guards (page half of FR-19)", () => {
   it("lets a committee member into /committee and an admin into both areas", async () => {
     server(user);
     const first = renderAt("/committee");
-    expect(await screen.findByRole("heading", { name: "Committee area" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "My notices" })).toBeInTheDocument();
     first.unmount();
 
     useSessionStore.setState({ user: null, status: "loading" });
@@ -74,13 +74,13 @@ describe("route guards (page half of FR-19)", () => {
     useSessionStore.setState({ user: null, status: "loading" });
     server(admin);
     renderAt("/committee");
-    expect(await screen.findByRole("heading", { name: "Committee area" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "My notices" })).toBeInTheDocument();
   });
 
   it("returns a signed-out user to the login page when they sign out inside an area", async () => {
     server(user);
     renderAt("/committee");
-    await screen.findByRole("heading", { name: "Committee area" });
+    await screen.findByRole("heading", { name: "My notices" });
     fireEvent.click(screen.getByRole("button", { name: /sign out/i }));
     expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
   });
@@ -104,7 +104,7 @@ describe("login page", () => {
     renderAt("/login");
     await screen.findByRole("heading", { name: "Sign in" });
     fill("ann@example.com", "pw");
-    expect(await screen.findByRole("heading", { name: "Committee area" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "My notices" })).toBeInTheDocument();
     const loginCall = fetchMock.mock.calls.find(([u]) => u === "/api/auth/login");
     expect(loginCall?.[1]?.body).toBe('{"email":"ann@example.com","password":"pw"}');
   });
@@ -130,7 +130,7 @@ describe("login page", () => {
     renderAt("/login", { from: "//evil.example/phish" });
     await screen.findByRole("heading", { name: "Sign in" });
     fill("ann@example.com", "pw");
-    expect(await screen.findByRole("heading", { name: "Committee area" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "My notices" })).toBeInTheDocument();
   });
 
   it("shows a clear message for a wrong password and stays on the page", async () => {
@@ -159,7 +159,7 @@ describe("login page", () => {
   it("sends an already signed-in user straight to their area", async () => {
     const fetchMock = server(user);
     renderAt("/login");
-    expect(await screen.findByRole("heading", { name: "Committee area" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "My notices" })).toBeInTheDocument();
     expect(calls(fetchMock)).not.toContain("POST /api/auth/login");
   });
 });
