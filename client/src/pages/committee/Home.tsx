@@ -4,6 +4,7 @@ import Pagination from "../../components/Pagination";
 import { ApiError, api } from "../../lib/api";
 import { formatDateTime } from "../../lib/format";
 import type { Notice } from "../../store/noticesStore";
+import { useSessionStore } from "../../store/sessionStore";
 
 const STATUSES = ["draft", "published", "archived"] as const;
 type Pending = { id: string; action: "archive" | "delete" } | null;
@@ -16,6 +17,7 @@ const button =
 export default function CommitteeHome() {
   const [params, setParams] = useSearchParams();
   const location = useLocation();
+  const isAdmin = useSessionStore((s) => s.user?.role === "admin");
   const status = params.get("status") ?? "";
   const pageNo = Number(params.get("page")) || 1;
 
@@ -49,14 +51,12 @@ export default function CommitteeHome() {
     void load();
   }, [load]);
 
-  const run = async (id: string, action: "archive" | "delete") => {
+  // Runs one change, then reloads the list; the message from the server is shown if it refuses.
+  const act = async (work: () => Promise<unknown>) => {
     setBusy(true);
     setError(null);
     try {
-      await api(`/notices/${id}`, {
-        method: "DELETE",
-        query: action === "archive" ? { mode: "archive" } : undefined,
-      });
+      await work();
       setPending(null);
       await load();
     } catch (err) {
@@ -65,6 +65,15 @@ export default function CommitteeHome() {
       setBusy(false);
     }
   };
+  const run = (id: string, action: "archive" | "delete") =>
+    act(() =>
+      api(`/notices/${id}`, {
+        method: "DELETE",
+        query: action === "archive" ? { mode: "archive" } : undefined,
+      }),
+    );
+  const pin = (id: string, pinned: boolean) =>
+    act(() => api(`/notices/${id}/pin`, { method: "POST", body: { pinned } }));
 
   const setFilter = (next: string) => {
     const out = new URLSearchParams();
@@ -138,6 +147,11 @@ export default function CommitteeHome() {
                   <span className="rounded bg-slate-100 px-2 py-0.5 font-semibold capitalize">
                     {n.status}
                   </span>
+                  {n.pinned && (
+                    <span className="rounded bg-amber-100 px-2 py-0.5 font-semibold text-amber-900">
+                      Pinned
+                    </span>
+                  )}
                   {expired && (
                     <span className="rounded bg-amber-100 px-2 py-0.5 font-semibold text-amber-900">
                       Expired
@@ -175,6 +189,16 @@ export default function CommitteeHome() {
                     </>
                   ) : (
                     <>
+                      {isAdmin && (n.pinned || (n.status === "published" && !expired)) && (
+                        <button
+                          type="button"
+                          className={button}
+                          disabled={busy}
+                          onClick={() => void pin(n.id, !n.pinned)}
+                        >
+                          {n.pinned ? "Unpin" : "Pin"}
+                        </button>
+                      )}
                       {n.status !== "archived" && (
                         <button
                           type="button"

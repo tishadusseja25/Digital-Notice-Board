@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Notice } from "../../store/noticesStore";
+import { useSessionStore } from "../../store/sessionStore";
 import { calls, json, stubFetch } from "../../testUtils";
 import CommitteeHome from "./Home";
 
@@ -177,5 +178,116 @@ describe("My notices", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
     expect(await screen.findByRole("heading", { name: "Notice 1" })).toBeInTheDocument();
     expect(screen.getByTestId("where")).toHaveTextContent(/^$/);
+  });
+});
+
+describe("pin controls", () => {
+  const asAdmin = () =>
+    useSessionStore.setState({
+      user: {
+        id: "u9",
+        name: "Root",
+        email: "root@example.com",
+        role: "admin",
+        mustChangePassword: false,
+      },
+      status: "ready",
+    });
+  const pinCalls = (mock: ReturnType<typeof stubFetch>) =>
+    calls(mock).filter((c) => c.includes("/pin"));
+  const pinBody = (mock: ReturnType<typeof stubFetch>) => {
+    const call = mock.mock.calls.find(([u]) => String(u).endsWith("/pin"));
+    return JSON.parse(String(call?.[1]?.body));
+  };
+
+  afterEach(() => useSessionStore.setState({ user: null, status: "loading" }));
+
+  it("lets an admin pin a published notice and unpin a pinned one, and shows the badge", async () => {
+    asAdmin();
+    const fetchMock = stubFetch((url, init) =>
+      init?.method === "POST"
+        ? json(200, { notice: notice(1) })
+        : json(200, page([notice(1), notice(2, { pinned: true })])),
+    );
+    renderHome();
+    await screen.findByRole("heading", { name: "Notice 1" });
+    expect(
+      within(screen.getByRole("heading", { name: "Notice 2" }).closest("li")!).getByText("Pinned"),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      within(screen.getByRole("heading", { name: "Notice 1" }).closest("li")!).getByRole("button", {
+        name: "Pin",
+      }),
+    );
+    await waitFor(() => expect(pinCalls(fetchMock)).toEqual(["POST /api/notices/id1/pin"]));
+    expect(pinBody(fetchMock)).toEqual({ pinned: true });
+
+    fireEvent.click(
+      within(screen.getByRole("heading", { name: "Notice 2" }).closest("li")!).getByRole("button", {
+        name: "Unpin",
+      }),
+    );
+    await waitFor(() => expect(pinCalls(fetchMock)).toContain("POST /api/notices/id2/pin"));
+  });
+
+  it("offers Pin only for published notices that have not expired", async () => {
+    asAdmin();
+    stubFetch(() =>
+      json(
+        200,
+        page([
+          notice(1, { status: "draft" }),
+          notice(2, { status: "archived" }),
+          notice(3, { expiresAt: "2020-01-01T00:00:00.000Z" }),
+          notice(4),
+        ]),
+      ),
+    );
+    renderHome();
+    await screen.findByRole("heading", { name: "Notice 4" });
+    expect(screen.getAllByRole("button", { name: "Pin" })).toHaveLength(1);
+    expect(
+      within(screen.getByRole("heading", { name: "Notice 4" }).closest("li")!).getByRole("button", {
+        name: "Pin",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows the server's message when the limit of three is reached", async () => {
+    asAdmin();
+    stubFetch((url, init) =>
+      init?.method === "POST"
+        ? json(409, {
+            error: {
+              code: "PIN_LIMIT",
+              message: "At most 3 notices can be pinned. Unpin one first.",
+            },
+          })
+        : json(200, page([notice(1)])),
+    );
+    renderHome();
+    await screen.findByRole("heading", { name: "Notice 1" });
+    fireEvent.click(screen.getByRole("button", { name: "Pin" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("At most 3 notices can be pinned");
+  });
+
+  it("gives committee members no pin buttons, only the badge", async () => {
+    useSessionStore.setState({
+      user: {
+        id: "u1",
+        name: "Ann",
+        email: "ann@example.com",
+        role: "committee",
+        mustChangePassword: false,
+      },
+      status: "ready",
+    });
+    stubFetch(() => json(200, page([notice(1), notice(2, { pinned: true })])));
+    renderHome();
+    await screen.findByRole("heading", { name: "Notice 1" });
+    expect(screen.queryByRole("button", { name: "Pin" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Unpin" })).not.toBeInTheDocument();
+    expect(screen.getByText("Pinned")).toBeInTheDocument();
   });
 });

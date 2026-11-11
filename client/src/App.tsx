@@ -16,6 +16,7 @@ const ChangePassword = lazy(() => import("./pages/account/ChangePassword"));
 const AdminHome = lazy(() => import("./pages/admin/Home"));
 const AdminUsers = lazy(() => import("./pages/admin/Users"));
 const AdminCategories = lazy(() => import("./pages/admin/Categories"));
+const AdminAudit = lazy(() => import("./pages/admin/Audit"));
 
 export default function App() {
   const init = useSessionStore((s) => s.init);
@@ -42,6 +43,7 @@ export default function App() {
             <Route index element={<AdminHome />} />
             <Route path="users" element={<AdminUsers />} />
             <Route path="categories" element={<AdminCategories />} />
+            <Route path="audit" element={<AdminAudit />} />
           </Route>
         </Route>
         <Route path="*" element={<NotFound />} />

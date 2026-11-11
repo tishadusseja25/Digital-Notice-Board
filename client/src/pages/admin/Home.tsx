@@ -18,6 +18,12 @@ export default function AdminHome() {
           : add, rename and remove the categories notices belong to.
         </li>
         <li>
+          <Link to="/admin/audit" className="underline">
+            Audit log
+          </Link>{" "}
+          : who did what, newest first.
+        </li>
+        <li>
           <Link to="/committee" className="underline">
             My notices
           </Link>{" "}

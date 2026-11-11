@@ -17,6 +17,9 @@ export default function AdminNav() {
         <NavLink to="/admin/categories" className={link}>
           Categories
         </NavLink>
+        <NavLink to="/admin/audit" className={link}>
+          Audit log
+        </NavLink>
       </nav>
       <Outlet />
     </div>
