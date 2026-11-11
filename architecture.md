@@ -295,7 +295,7 @@ Rules: payloads never contain hashes or private fields; clients cannot emit even
 
 - **Tailwind:** mobile-first utility classes; a small set of reusable components (card, button, input) so styles stay consistent; breakpoints at 640 / 1024 px; focus rings never removed.
 - **Route guards:** `RouteGuard` wraps `/committee/*` and `/admin/*`; it waits for `GET /api/auth/me`, then redirects or renders. API errors 401/403 also clear the session or show the forbidden page.
-- **State:** `sessionStore`, `noticesStore`, `uiStore` (Section 3). `noticesStore.applyEvent()` inserts, replaces or removes a card according to the socket event and the active filters (a new notice that does not match the current filter is ignored).
+- **State:** `sessionStore`, `noticesStore`, `uiStore` (Section 3). `noticesStore.reload()` re-fetches the current view (debounced 300 ms) when a public socket event arrives, so the server's own filters decide what appears; `dropExpired()` runs every 30 s.
 - **Socket module:** connects after the session check, reconnects automatically, and on reconnect refetches the current page to cover missed events; shows a small "live" indicator (`aria-live`).
 - **Forms:** same Zod schemas from `shared/` on client (fast feedback) and server (authoritative).
 - **Loading and error states:** every list and form has loading, empty and error views.

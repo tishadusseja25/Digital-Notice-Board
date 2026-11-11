@@ -1,8 +1,10 @@
 import { Link, Outlet } from "react-router-dom";
+import { useLiveStore } from "../lib/socket";
 import { useSessionStore } from "../store/sessionStore";
 
 export default function Layout() {
   const { user, status, logout } = useSessionStore();
+  const live = useLiveStore((s) => s.status);
   const area = user?.role === "admin" ? "/admin" : "/committee";
 
   return (
@@ -18,6 +20,9 @@ export default function Layout() {
           <Link to="/" className="text-lg font-bold">
             Digital Notice Board
           </Link>
+          <span aria-live="polite" className="text-xs text-slate-600">
+            {live === "live" ? "Live" : live === "offline" ? "Reconnecting…" : ""}
+          </span>
           <nav aria-label="Account" className="flex items-center gap-3 text-sm">
             {status === "ready" && user && (
               <>

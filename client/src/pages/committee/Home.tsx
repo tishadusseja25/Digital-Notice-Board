@@ -3,6 +3,7 @@ import { Link, useLocation, useSearchParams } from "react-router-dom";
 import Pagination from "../../components/Pagination";
 import { ApiError, api } from "../../lib/api";
 import { formatDateTime } from "../../lib/format";
+import { subscribeLive } from "../../lib/socket";
 import type { Notice } from "../../store/noticesStore";
 import { useSessionStore } from "../../store/sessionStore";
 
@@ -50,6 +51,14 @@ export default function CommitteeHome() {
   useEffect(() => {
     void load();
   }, [load]);
+  // Private live events: changes to my notices (all notices for admins), and reconnects.
+  useEffect(
+    () =>
+      subscribeLive((e) => {
+        if (e.type === "notice:changed" || e.type === "reconnected") void load();
+      }),
+    [load],
+  );
 
   // Runs one change, then reloads the list; the message from the server is shown if it refuses.
   const act = async (work: () => Promise<unknown>) => {

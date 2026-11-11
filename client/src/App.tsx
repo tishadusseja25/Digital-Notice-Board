@@ -7,6 +7,7 @@ import Board from "./pages/Board";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import NoticeDetail from "./pages/NoticeDetail";
+import { restartSocket, stopSocket } from "./lib/socket";
 import { useSessionStore } from "./store/sessionStore";
 
 // Staff pages are loaded on demand so the public board's download stays small.
@@ -20,9 +21,17 @@ const AdminAudit = lazy(() => import("./pages/admin/Audit"));
 
 export default function App() {
   const init = useSessionStore((s) => s.init);
+  const status = useSessionStore((s) => s.status);
+  const userId = useSessionStore((s) => s.user?.id);
   useEffect(() => {
     void init();
   }, [init]);
+  // Connect once the session is known, and reconnect on sign-in or sign-out so the server
+  // puts the socket in the right rooms.
+  useEffect(() => {
+    if (status === "ready") restartSocket();
+    return stopSocket;
+  }, [status, userId]);
 
   return (
     <Routes>

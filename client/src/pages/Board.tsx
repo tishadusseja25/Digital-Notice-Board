@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import Filters from "../components/Filters";
 import NoticeCard from "../components/NoticeCard";
 import Pagination from "../components/Pagination";
+import { subscribeLive } from "../lib/socket";
 import { useNoticesStore, type BoardQuery } from "../store/noticesStore";
 
 const KEYS = ["q", "category", "from", "to"] as const;
@@ -28,6 +29,18 @@ export default function Board() {
   useEffect(() => {
     void loadCategories();
   }, [loadCategories]);
+
+  // Live updates: any public change (or a reconnect) reloads this view; every 30 s notices past
+  // their expiry time are dropped without asking the server.
+  useEffect(() => {
+    const { reload, dropExpired } = useNoticesStore.getState();
+    const off = subscribeLive((e) => e.type !== "notice:changed" && reload());
+    const timer = setInterval(dropExpired, 30_000);
+    return () => {
+      off();
+      clearInterval(timer);
+    };
+  }, []);
 
   const navigate = (next: BoardQuery) => {
     const out = new URLSearchParams();

@@ -33,14 +33,21 @@ type NoticesState = {
   loading: boolean;
   error: string | null;
   categories: Category[];
-  load: (query: BoardQuery) => Promise<void>;
+  /** `silent` keeps the current list on screen (no spinner, no error) for live refreshes. */
+  load: (query: BoardQuery, silent?: boolean) => Promise<void>;
+  /** Live update: reloads the current view once, however many events arrive close together. */
+  reload: () => void;
+  /** Hides notices whose expiry time has passed (the server already stops sending them). */
+  dropExpired: () => void;
   loadCategories: () => Promise<void>;
 };
 
 // Only the newest request may write its result, so a slow old answer never overwrites a newer one.
 let latest = 0;
+let lastQuery: BoardQuery = {};
+let reloadTimer: ReturnType<typeof setTimeout> | undefined;
 
-export const useNoticesStore = create<NoticesState>((set) => ({
+export const useNoticesStore = create<NoticesState>((set, get) => ({
   items: [],
   total: 0,
   page: 1,
@@ -49,9 +56,10 @@ export const useNoticesStore = create<NoticesState>((set) => ({
   error: null,
   categories: [],
 
-  async load(query) {
+  async load(query, silent = false) {
     const id = ++latest;
-    set({ loading: true, error: null });
+    lastQuery = query;
+    if (!silent) set({ loading: true, error: null });
     try {
       const data = await api<{ items: Notice[]; total: number; page: number; limit: number }>(
         "/notices",
@@ -59,8 +67,20 @@ export const useNoticesStore = create<NoticesState>((set) => ({
       );
       if (id === latest) set({ ...data, loading: false });
     } catch {
-      if (id === latest) set({ loading: false, error: "Could not load notices." });
+      if (id === latest) set(silent ? {} : { loading: false, error: "Could not load notices." });
     }
+  },
+
+  reload() {
+    clearTimeout(reloadTimer);
+    reloadTimer = setTimeout(() => void get().load(lastQuery, true), 300);
+  },
+
+  dropExpired() {
+    const now = Date.now();
+    const live = get().items.filter((n) => !n.expiresAt || new Date(n.expiresAt).getTime() > now);
+    const gone = get().items.length - live.length;
+    if (gone > 0) set({ items: live, total: Math.max(0, get().total - gone) });
   },
 
   async loadCategories() {

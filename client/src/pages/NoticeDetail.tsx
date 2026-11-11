@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ApiError, api } from "../lib/api";
 import { formatDateTime } from "../lib/format";
+import { subscribeLive } from "../lib/socket";
 import type { Notice } from "../store/noticesStore";
 
 type View =
@@ -24,6 +25,15 @@ export default function NoticeDetail() {
       current = false;
     };
   }, [id]);
+
+  // Taken down while someone is reading it.
+  useEffect(
+    () =>
+      subscribeLive((e) => {
+        if (e.type === "notice:removed" && e.id === id) setView({ state: "gone" });
+      }),
+    [id],
+  );
 
   const back = (
     <Link to="/" className="underline">
