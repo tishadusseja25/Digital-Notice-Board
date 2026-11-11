@@ -1,7 +1,19 @@
+import { useEffect } from "react";
+import { Route, Routes } from "react-router-dom";
+import Layout from "./components/Layout";
+import { useSessionStore } from "./store/sessionStore";
+
 export default function App() {
+  const init = useSessionStore((s) => s.init);
+  useEffect(() => {
+    void init();
+  }, [init]);
+
   return (
-    <main className="min-h-screen bg-slate-50 p-6 text-slate-900">
-      <h1 className="text-3xl font-bold">Digital Notice Board</h1>
-    </main>
+    <Routes>
+      <Route element={<Layout />}>
+        <Route path="/" element={<h1 className="text-2xl font-bold">Latest notices</h1>} />
+      </Route>
+    </Routes>
   );
 }
