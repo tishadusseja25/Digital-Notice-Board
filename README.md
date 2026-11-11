@@ -12,7 +12,7 @@ cp .env.example .env        # then replace every CHANGE_ME value
 docker compose up -d mongo  # authenticated MongoDB
 npm install
 npm run seed                # creates the first admin and the default categories
-npm run dev                 # server on :4000, client on :5173
+npm run dev                 # starts both: server on :4000, client on :5173
 ```
 
 Open http://localhost:5173. Sign in with the `SEED_ADMIN_*` values from `.env`; you must set a new password at first sign-in.
