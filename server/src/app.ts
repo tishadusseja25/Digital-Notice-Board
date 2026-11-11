@@ -5,6 +5,7 @@ import { authenticate } from "./middleware/auth.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
 import { createRateLimiters } from "./middleware/rateLimit.js";
 import { rejectOperatorKeys, requireSameOrigin } from "./middleware/security.js";
+import { auditRoutes } from "./routes/audit.js";
 import { authRoutes } from "./routes/auth.js";
 import { categoryRoutes } from "./routes/categories.js";
 import { health } from "./routes/health.js";
@@ -37,6 +38,7 @@ export function createApp(env: Env) {
   app.use("/api/me", meRoutes());
   app.use("/api/categories", categoryRoutes());
   app.use("/api/users", userRoutes(env));
+  app.use("/api/audit", auditRoutes());
   app.use("/api", notFound);
   app.use(errorHandler);
   return app;

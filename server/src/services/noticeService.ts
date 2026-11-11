@@ -129,6 +129,8 @@ export async function updateNotice(
     if (patch.status === "published" && !notice.publishedAt) notice.publishedAt = new Date();
     notice.status = patch.status;
   }
+  // A hidden notice must not keep a pin slot.
+  if (notice.status !== "published") notice.pinned = false;
   await notice.save();
   await attachImages(
     (patch.images ?? []).map((i) => i.fileId),
@@ -158,6 +160,7 @@ export async function removeNotice(
   if (!canManage(notice, caller)) throw forbidden();
   if (mode === "archive") {
     notice.status = "archived";
+    notice.pinned = false;
     await notice.save();
   } else {
     await notice.deleteOne();
@@ -232,4 +235,37 @@ export async function listPublic(opts: PublicListOptions) {
     opts.page,
     opts.limit,
   );
+}
+
+export const MAX_PINNED = 3;
+
+/** Admin only (checked by the route). Only publicly visible notices can be pinned, at most MAX_PINNED. */
+export async function setPinned(id: string, caller: Caller, pinned: boolean, ip?: string) {
+  const notice = await load(id);
+  if (!notice) throw notFound();
+  if (pinned && !notice.pinned) {
+    if (!isPubliclyVisible(notice)) {
+      throw new HttpError(409, "NOT_PUBLISHED", "Only published notices can be pinned");
+    }
+    const count = await Notice.countDocuments({ ...publicNoticeFilter(), pinned: true });
+    if (count >= MAX_PINNED) {
+      throw new HttpError(
+        409,
+        "PIN_LIMIT",
+        `At most ${MAX_PINNED} notices can be pinned. Unpin one first.`,
+      );
+    }
+  }
+  if (notice.pinned !== pinned) {
+    notice.pinned = pinned;
+    await notice.save();
+    await audit({
+      actorId: caller.id,
+      action: pinned ? "notice.pin" : "notice.unpin",
+      targetType: "notice",
+      targetId: notice._id,
+      ip,
+    });
+  }
+  return toDto(notice, true);
 }

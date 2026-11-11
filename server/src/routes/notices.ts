@@ -56,6 +56,7 @@ const listQuery = z
     message: "from must not be after to",
     path: ["from"],
   });
+const pinSchema = z.object({ pinned: z.boolean() }).strict();
 const deleteQuery = z.object({ mode: z.enum(["archive", "delete"]).default("delete") }).strict();
 
 // Unknown or malformed ids are plain "not found", never a 500.
@@ -104,6 +105,16 @@ export function noticeRoutes(env: Env) {
     wrap(async (req, res) => {
       const id = idParam(req.params.id!);
       res.json({ notice: await noticeService.updateNotice(id, req.auth!, req.body, env, req.ip) });
+    }),
+  );
+
+  router.post(
+    "/:id/pin",
+    requireRole("admin"),
+    validate(pinSchema),
+    wrap(async (req, res) => {
+      const id = idParam(req.params.id!);
+      res.json({ notice: await noticeService.setPinned(id, req.auth!, req.body.pinned, req.ip) });
     }),
   );
 
