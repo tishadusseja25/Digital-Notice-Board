@@ -6,6 +6,7 @@ import { isObjectId, paged } from "../lib/objectId.js";
 import { isPubliclyVisible, publicNoticeFilter } from "../lib/visibility.js";
 import { Category } from "../models/Category.js";
 import { Notice, type NoticeDoc, type NoticeStatus } from "../models/Notice.js";
+import { announceNotice } from "../realtime/events.js";
 import { audit } from "./auditService.js";
 import { attachImages, checkAttachable, deleteFiles, type ImageRef } from "./imageService.js";
 
@@ -36,6 +37,18 @@ export function toDto(notice: NoticeDoc, staff: boolean) {
     updatedAt: notice.updatedAt,
     ...(staff ? { status: notice.status, authorId: notice.authorId.toString() } : {}),
   };
+}
+
+/** Tells open boards what changed, comparing what the public could see before and after. */
+function announce(notice: NoticeDoc, wasPublic: boolean) {
+  announceNotice({
+    id: notice.id as string,
+    authorId: notice.authorId.toString(),
+    wasPublic,
+    nowPublic: isPubliclyVisible(notice),
+    publicDto: toDto(notice, false),
+    staffDto: toDto(notice, true),
+  });
 }
 
 async function assertCategory(categoryId: string) {
@@ -81,6 +94,7 @@ export async function createNotice(caller: Caller, input: NoticeInput, env: Env,
     targetId: notice._id,
     ip,
   });
+  announce(notice, false);
   return toDto(notice, true);
 }
 
@@ -105,6 +119,7 @@ export async function updateNotice(
   const notice = await load(id);
   if (!notice) throw notFound();
   if (!canManage(notice, caller)) throw forbidden();
+  const wasPublic = isPubliclyVisible(notice);
 
   // Sending `images` replaces the whole list; images left out are deleted with their files.
   const removedImages: string[] = [];
@@ -145,6 +160,7 @@ export async function updateNotice(
     targetId: notice._id,
     ip,
   });
+  announce(notice, wasPublic);
   return toDto(notice, true);
 }
 
@@ -158,6 +174,7 @@ export async function removeNotice(
   const notice = await load(id);
   if (!notice) throw notFound();
   if (!canManage(notice, caller)) throw forbidden();
+  const wasPublic = isPubliclyVisible(notice);
   if (mode === "archive") {
     notice.status = "archived";
     notice.pinned = false;
@@ -173,6 +190,9 @@ export async function removeNotice(
     targetId: notice._id,
     ip,
   });
+  // The deleted document still says "published" in memory; mark it gone so it is announced as removed.
+  if (mode === "delete") notice.status = "archived";
+  announce(notice, wasPublic);
 }
 
 /** Committee sees their own notices in any status; admin sees everyone's. */
@@ -266,6 +286,7 @@ export async function setPinned(id: string, caller: Caller, pinned: boolean, ip?
       targetId: notice._id,
       ip,
     });
+    announce(notice, isPubliclyVisible(notice));
   }
   return toDto(notice, true);
 }
