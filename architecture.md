@@ -2,23 +2,231 @@
 
 ## 1. System overview
 
-A React single-page app (built with Vite, styled with Tailwind) talks to one Node.js Express server over REST and Socket.IO. The server stores everything in one MongoDB database; images live in the same database (GridFS). In production the Express server also serves the built frontend, so the browser sees one origin, one port and one container. A GitHub Actions pipeline builds the Docker image, which runs on Render against MongoDB Atlas.
+A React single-page app (built with Vite, styled with Tailwind) talks to one Node.js Express server over REST and Socket.IO. The server stores everything in one MongoDB database; images live in the same database (GridFS). In production the Express server also serves the built frontend, so the browser sees one origin, one port and one container. A GitHub Actions pipeline builds the Docker image, which runs on Render against MongoDB Atlas. The diagrams below follow the code as it is built; section numbers elsewhere in this file and in `PRD.md` are unchanged.
 
-```text
-flowchart LR
-  V[Viewer browser: React + Tailwind] -->|HTTPS REST + WebSocket| X[Express server in Docker]
-  C[Committee / Admin browser] -->|HTTPS REST + WebSocket, HttpOnly JWT cookies| X
-  X --> MW[Middleware: rate limit, origin, JWT, role]
-  MW --> RT[Routes: validate, authorise]
-  RT --> SV[Services]
-  SV --> DB[(MongoDB noticeboard)]
-  DB --- GF[(GridFS bucket images)]
-  SV --> IO[Socket.IO rooms]
-  IO --> V
-  IO --> C
-  GH[GitHub Actions] -->|build, test, image| REG[Container registry]
-  REG --> R[Render] --> X
+### 1.1 Runtime view
+
+```mermaid
+flowchart TD
+  subgraph Browser["Browser: React 18, Tailwind, React Router"]
+    PAGES["Pages: board, notice, sign in, committee, admin"]
+    STORES["Zustand stores: session, notices, live status"]
+    API["lib/api.ts: fetch with ONE shared silent refresh"]
+    SOCK["lib/socket.ts: Socket.IO client"]
+    PAGES --> STORES
+    STORES --> API
+    PAGES --> SOCK
+  end
+  subgraph App["One Node 20 process: Express 4 and Socket.IO on one port"]
+    STATIC["Built website: /assets cached one year, index.html never cached"]
+    MW["Middleware pipeline, see 1.2"]
+    ROUTES["Routes: auth, notices, images, me, categories, users, audit, health"]
+    SVC["Services: rules, object-level checks, audit, announce"]
+    RT["Realtime: rooms public, user id, admin"]
+    MW --> ROUTES --> SVC
+    SVC --> RT
+  end
+  DB[("MongoDB noticeboard: users, refreshTokens, categories, notices, auditLogs")]
+  GFS[("GridFS bucket images: images.files and images.chunks")]
+  Browser -->|"GET page and assets"| STATIC
+  API -->|"REST /api with HttpOnly cookies"| MW
+  SOCK <-->|"WebSocket /socket.io, cookie read at connect"| RT
+  SVC --> DB
+  SVC --> GFS
 ```
+
+In development the same code runs as two processes: the Express server on port 4000 and the Vite dev server on port 5173, which forwards `/api` and `/socket.io` to the server so cookies stay same-origin.
+
+### 1.2 What happens to every HTTP request
+
+Order is exactly the order of `server/src/app.ts`.
+
+```mermaid
+flowchart TD
+  R["Incoming HTTP request"] --> H["helmet: security headers and content security policy"]
+  H --> S{"Production and the path is a file of the built site?"}
+  S -->|yes| F["Serve it: /assets cached one year, index.html never cached"]
+  S -->|no| L1["Read limiter: GET and HEAD, 120 per minute per IP"]
+  L1 --> J["JSON body, 100 KB at most, then cookie parser"]
+  J --> O{"Key with a dollar sign or a dot in body, query or params?"}
+  O -->|yes| E400["400 VALIDATION"]
+  O -->|no| A["authenticate: read the nb_access cookie, set the caller, or stay anonymous"]
+  A --> CS{"Not GET, HEAD, OPTIONS: Origin equals APP_ORIGIN?"}
+  CS -->|no| E403["403 BAD_ORIGIN"]
+  CS -->|yes| L2["Write limiter: 30 per minute per user, per IP when anonymous"]
+  L2 --> P{"Path starts with /api?"}
+  P -->|"no, GET in production"| IDX["Send index.html so React Router handles the address"]
+  P -->|"yes, unknown route"| N404["404 NOT_FOUND as JSON"]
+  P -->|"yes, known route"| RR["requireRole: 401 when not signed in, 403 for the wrong role"]
+  RR --> V["Zod validation of params, query and body, unknown keys rejected"]
+  V --> SV["Service: object-level check author or admin, database write with sanitised filters"]
+  SV --> AU["Audit entry, then announce to Socket.IO rooms after the write succeeded"]
+  AU --> OK["JSON response"]
+```
+
+Every failure leaves through one error handler with one format: `{ "error": { "code", "message", "fields?" } }`. Stack traces are never sent.
+
+### 1.3 Sign-in, silent refresh and sign-out
+
+```mermaid
+sequenceDiagram
+  participant B as Browser
+  participant S as Server
+  participant D as MongoDB
+  B->>S: GET /api/auth/me on page load
+  S-->>B: 401 because there is no cookie
+  B->>S: POST /api/auth/refresh as the one retry
+  S-->>B: 401 so the visitor is anonymous
+  B->>S: POST /api/auth/login with email and password
+  S->>D: find user, compare bcrypt hash, check active
+  alt wrong email, wrong password or disabled account
+    S->>D: audit login.failure
+    S-->>B: 401 with one generic message, 5 failures per 15 minutes per IP and email, then 429
+  else correct
+    S->>D: audit login.success, store the refresh token as an HMAC hash
+    S-->>B: 200 user and cookies nb_access 15 minutes, nb_refresh 7 days on path /api/auth
+  end
+  Note over B,S: later, the access cookie has expired
+  B->>S: any API call
+  S-->>B: 401
+  B->>S: POST /api/auth/refresh, one call shared by every waiting request
+  S->>D: mark the presented refresh token used, atomically
+  alt token unknown, expired, or already used, or the user is disabled
+    S->>D: revoke every refresh token of that user when a used token was replayed
+    S-->>B: 401 and the client clears the session, the guard shows sign in
+  else valid
+    S-->>B: 204 with a new cookie pair
+    B->>S: the original request is repeated once
+  end
+  B->>S: POST /api/auth/logout
+  S->>D: revoke this refresh token
+  S-->>B: 204 and cookies cleared
+```
+
+Changing the password revokes every refresh token except the one making the request. Disabling a user or resetting their password revokes all of that user's tokens at once.
+
+### 1.4 Protecting pages and areas
+
+The screen guard is a convenience. The real gate is section 1.2 on every API call.
+
+```mermaid
+flowchart TD
+  A["Open /committee, /account or /admin"] --> B{"Session check finished?"}
+  B -->|no| C["Show Loading"]
+  B -->|yes| D{"Signed in?"}
+  D -->|no| E["Redirect to /login and remember the page"]
+  D -->|yes| F{"Role allowed for this area?"}
+  F -->|no| G["403 page: Forbidden"]
+  F -->|yes| H{"Temporary password still set?"}
+  H -->|yes, not on /account/password| I["Redirect to /account/password"]
+  H -->|no| J["Render the lazy-loaded page"]
+  E --> K["After sign in: go back to the saved page, or the area of the role"]
+  J --> L["Sign out: go to the board with a message, then end the session"]
+```
+
+Areas: `/committee/*` and `/account/password` allow committee and admin, `/admin/*` allows admin only, everything else is public.
+
+### 1.5 Publishing a notice and the live update
+
+```mermaid
+sequenceDiagram
+  participant V as Viewer browser with the board open
+  participant C as Committee browser
+  participant S as Server routes and noticeService
+  participant D as MongoDB
+  participant IO as Socket.IO rooms
+  V->>IO: connect, origin check, 20 connections per minute per IP, cookie read
+  IO-->>V: joined room public
+  C->>IO: connect with the login cookie
+  IO-->>C: joined public and user id, an admin also joins admin
+  C->>S: POST /api/notices with status published
+  S->>S: pipeline 1.2, then check the images belong to the author
+  S->>D: save notice, attach images, write audit entry
+  S->>IO: announce, only after the write succeeded
+  IO-->>V: notice:created with public fields only
+  IO-->>C: notice:changed with status and authorId, to the author and admin rooms
+  V->>S: GET /api/notices as a silent reload, bursts merged within 300 ms
+  S-->>V: the current page including the new notice
+  Note over V: the new row slides in with a highlight for 8 seconds
+```
+
+Which event goes where is decided by comparing "publicly visible before" with "publicly visible after" (published and not past its expiry):
+
+```mermaid
+flowchart TD
+  W["A notice was created, edited, archived, deleted or pinned"] --> BA{"Public before?"}
+  BA -->|no| NA{"Public now?"}
+  BA -->|yes| NB{"Public now?"}
+  NA -->|yes| CR["public room: notice:created"]
+  NA -->|no| NONE["nothing for the public"]
+  NB -->|yes| UP["public room: notice:updated"]
+  NB -->|no| RM["public room: notice:removed with only the id"]
+  W --> CH["always: notice:changed to the author room and the admin room"]
+```
+
+Sockets only listen. The server registers no handler for client messages, so a client cannot send events or join rooms. A socket is disconnected when its access token expires: the client then refreshes quietly and reconnects. An expired notice is not announced by the server: each open board drops it on a 30 second sweep, and the public API already stops returning it.
+
+### 1.6 Images: upload, attach, serve, clean up
+
+```mermaid
+flowchart TD
+  U["POST /api/images: multipart file and alt text"] --> UR{"Signed in as committee or admin?"}
+  UR -->|no| U401["401 or 403 before any byte is read"]
+  UR -->|yes| UM["multer in memory, one file, MAX_IMAGE_MB 10"]
+  UM --> UT{"Real type from the bytes: JPEG, PNG or WebP?"}
+  UT -->|no| U400["400 with a message on the file field"]
+  UT -->|yes| UG["Store the exact bytes in GridFS, random name, noticeId empty"]
+  UG --> UF["Return fileId and alt"]
+  UF --> AT["Notice create or edit lists images: each must exist, belong to the uploader or an admin, be unattached, at most 5 per notice"]
+  AT --> AM["Attach: set noticeId on the file"]
+  G["GET /api/images/id"] --> GP{"Attached notice publicly visible?"}
+  GP -->|yes| GS["Stream the original bytes, public cache one year, immutable, ETag is the SHA-256"]
+  GP -->|no| GA{"Caller is the author or an admin? Unattached: the uploader or an admin"}
+  GA -->|yes| GV["Stream the bytes, private no-cache"]
+  GA -->|no| G404["404"]
+  CL["npm run cleanup, run by hand about monthly"] --> CD["Delete images never attached after 24 hours and notices expired over a year, with their images"]
+```
+
+### 1.7 Inside the browser
+
+```mermaid
+flowchart LR
+  URL["Address bar: search, category, dates, page"] --> BOARD["Board page"]
+  BOARD -->|"load"| NS["noticesStore: items, total, fresh ids"]
+  NS --> AP["lib/api.ts"] -->|"GET /api/notices"| SRV["Server"]
+  SRV -->|"another 401"| RF["one shared refresh, then retry"]
+  SK["lib/socket.ts, started after the session check and restarted on sign in or out"] -->|"public events and reconnects"| RL["noticesStore.reload, merged within 300 ms"]
+  RL --> NS
+  SK -->|"private events and reconnects"| MY["My notices reloads"]
+  SK -->|"notice:removed for the open notice"| DET["Notice page shows no longer available"]
+  SK -->|"disconnect, token expired"| RS["GET /api/auth/me refreshes the login, then reconnect"]
+  TM["Every 30 seconds"] --> DE["noticesStore.dropExpired"]
+  DE --> NS
+  SK --> LV["useLiveStore: Live or Reconnecting in the header"]
+  SS["sessionStore: user, status, login, logout"] --> GRD["Route guards and header"]
+```
+
+### 1.8 From a commit to a running site
+
+```mermaid
+flowchart TD
+  DEV["npm run dev: Vite 5173 forwards /api and /socket.io to the server on 4000"] --> GIT["git commit, the commit-msg hook checks the message"]
+  GIT --> CI
+  subgraph CI["GitHub Actions: .github/workflows/ci.yml"]
+    CHK["check: lint, npm audit for high findings, type check, tests, build"]
+    E2E["e2e: Playwright and Chromium on the production build, accessibility and CSP scan"]
+    IMG["image: docker build on every run, push to ghcr.io only from main"]
+    CHK --> E2E
+    CHK --> IMG
+    E2E --> IMG
+  end
+  IMG --> REG[("ghcr.io image tagged with the commit and latest")]
+  REG --> RND["Render web service, or Render builds the Dockerfile itself"]
+  RND --> ATL[("MongoDB Atlas: user noticeboard_app, readWrite on noticeboard")]
+  LOC["docker compose up: app image on port 3000 and MongoDB 7 with authentication"] --> VOL[("mongo-data volume")]
+```
+
+The image has two stages: one builds the client and the server, the other is a slim `node:20-alpine` runtime with production dependencies only, running as the `node` user with a health check on `/api/health`.
 
 ## 2. Tech stack
 
@@ -30,11 +238,11 @@ flowchart LR
 | Frontend | React 18 + Vite + TypeScript | The checklist asks for React; Vite builds fast. | Next.js: server rendering is not needed; extra complexity. |
 | Styling | Tailwind CSS | Checklist item; utility classes keep the design consistent and responsive. | CSS Modules/Bootstrap: not on the checklist. |
 | Routing | React Router 6 | Standard SPA routing with lazy-loaded areas. | Hand-rolled routing. |
-| State | Zustand | Three small stores; far less code than Redux. | Redux Toolkit: more boilerplate; Context alone: re-render problems with live updates. |
+| State | Zustand | Two small stores (session, notices) plus a live-status store; far less code than Redux. | Redux Toolkit: more boilerplate; Context alone: re-render problems with live updates. |
 | Real-time | Socket.IO 4 | Checklist item; rooms, auto-reconnect, fallback transport. | Raw WebSocket: no rooms or reconnect logic; polling: not real time. |
 | Auth | JWT via `jsonwebtoken` (owner's decision) | Signed short-lived access tokens. | Server sessions: owner chose JWT. |
 | Password hash | bcrypt (cost 12) | Standard, slow by design. | Plain SHA: too fast to brute-force. |
-| Validation | Zod (shared by client and server) | One schema per input; rejects unknown keys. | Joi/hand-written checks. |
+| Validation | Zod on the server; the client uses HTML constraints and shows the server's field messages | One schema per input; rejects unknown keys. The server is the authority. | Joi/hand-written checks; a shared schema package (not needed at this size). |
 | Upload parsing | multer (memory, size-limited) + `file-type` | Streams to GridFS; detects the real type from bytes. | Trusting file extension or `Content-Type`: spoofable. |
 | Security headers | helmet | One line for CSP, nosniff, frame protection, HSTS. | Setting headers by hand. |
 | Rate limiting | `rate-limiter-flexible` (memory) | Works for REST and sockets. | Redis: unneeded extra service for one instance. |
@@ -50,15 +258,15 @@ flowchart LR
 - **Role-based access control (RBAC):** roles `committee` and `admin` decide which routes and actions are allowed. Anonymous is "no token".
 - **Object-level authorisation:** a committee member may only change notices where `authorId` equals their user id. Checked in the service on every edit/delete.
 - **Password hashing:** bcrypt, so a database leak does not reveal passwords.
-- **JWT strategy:** short access token (15 min) plus long refresh token (7 days). The access token is stateless (cheap to check). The refresh token is stored hashed so it can be revoked and rotated. Both are `HttpOnly`, `Secure` (production), `SameSite=Strict` cookies, so page scripts cannot read them.
+- **JWT strategy:** short access token (15 min) plus long refresh token (7 days). The access token is stateless (cheap to check). The refresh token is stored as an HMAC-SHA256 hash (keyed with `JWT_REFRESH_PEPPER`) so it can be revoked and rotated; a token that is presented twice ends every session of that user. Both are `HttpOnly`, `Secure` (production), `SameSite=Strict` cookies, so page scripts cannot read them.
 - **CSRF protection:** `SameSite=Strict` plus an `Origin` header check on non-GET requests.
-- **Input validation:** Zod schemas on every body, query, param and socket payload. Strings only where strings are expected, so `{"$ne": null}` can never arrive as an object.
+- **Input validation:** Zod schemas on every body, query and param (the socket accepts no client payloads at all). Strings only where strings are expected, so `{"$ne": null}` can never arrive as an object.
 - **NoSQL (operator) injection defence:** (1) schema validation rejects objects where strings belong, (2) a sanitiser rejects keys starting with `$` or containing `.`, (3) Mongoose `sanitizeFilter: true` and `strictQuery: true`, (4) search text goes only into `$text: { $search: <string> }`, never into an object built from user input. No query is built by string concatenation and `$where` is never used.
 - **XSS defence:** notice bodies are plain text, rendered by React (auto-escaped); strict CSP blocks inline scripts.
 - **Safe uploads:** size cap, content-based allow-list, random server-generated ids (never the user's filename), `nosniff`.
 - **Original-quality images:** the upload buffer is written to GridFS unchanged and streamed back unchanged. No image library touches the bytes.
 - **Client route guard:** a React Router wrapper reads the session store and redirects. This is convenience only; the API is the real gate.
-- **Client state (Zustand):** `sessionStore` (user, loading), `noticesStore` (items, filters, page, total, `applyEvent()`), `uiStore` (toasts, connection status). Filters are mirrored in the URL.
+- **Client state (Zustand):** `sessionStore` (user, status, login, logout, change password), `noticesStore` (items, total, categories, ids that just arrived live, `reload()` and `dropExpired()`), and `useLiveStore` in `lib/socket.ts` (Live or Reconnecting). Filters and the page number live in the URL, not in a store.
 - **Socket.IO rooms:** `public` (everyone), `user:<id>` (author's own drafts), `admin` (all). Events are emitted only after the database write succeeds.
 - **Socket authentication:** the handshake reads the access cookie; a valid token adds the private rooms, none/invalid keeps the socket public-only. A timer disconnects the socket at token expiry so the client reconnects with a fresh token.
 - **Rate limiting:** limits brute force on login, abuse of writes and public reads, and socket connection floods.
@@ -79,39 +287,42 @@ digital_notice_board/
   PRD.md, architecture.md, README.md
   .env.example                placeholders only
   .gitignore, .dockerignore
-  Dockerfile                  multi-stage: build client, build server, slim runtime
+  Dockerfile                  two stages: build client and server, slim non-root runtime
   docker-compose.yml          app + MongoDB with auth and health checks
-  .github/workflows/ci.yml    lint, typecheck, test, build image, push on main
+  playwright.config.ts        browser test setup (Chromium, throwaway server)
+  .github/workflows/ci.yml    check, e2e, image
   scripts/
     mongo-init.js             creates database users (see section 5)
     seed-admin.ts             first admin and default categories from env
-    cleanup.ts                removes notices expired > 1 year, orphan images
+    seed-demo.ts              demo committee members, categories, about 180 notices with images
+    cleanup.ts                removes notices expired > 1 year, unattached images
   shared/
-    schemas.ts                Zod schemas and types used by client and server
+    src/index.ts              APP_NAME only (no shared schemas)
   server/
     src/
       index.ts                creates HTTP server, Express app, Socket.IO
-      app.ts                  middleware order, route mounting, static files
+      app.ts                  middleware order, route mounting, static files, SPA fallback
       config/env.ts           reads and checks env variables
       db.ts                   Mongoose connection (sanitizeFilter on)
-      middleware/             rateLimit, origin, auth, requireRole, errorHandler, validate
-      routes/                 auth, notices, images, categories, users, audit, health
+      middleware/             rateLimit, security (operator keys, origin), auth, errorHandler, validate
+      routes/                 auth, notices, images, me, categories, users, audit, health
       services/               authService, noticeService, imageService, userService, categoryService, auditService
       models/                 User, RefreshToken, Category, Notice, AuditLog
-      realtime/               socket.ts (auth, rooms), events.ts (emit helpers)
-      lib/                    jwt, password, sanitize, errors, logger
-    tests/                    unit and integration (REST and socket)
+      realtime/               socket.ts (origin, limit, rooms, expiry), events.ts (announce)
+      lib/                    jwt, password, sanitize, errors, logger, access, visibility, cookies, objectId
+    tests/                    unit and integration (REST, sockets, access matrix, headers, cleanup, seed)
   client/
+    public/favicon.svg
     src/
-      main.tsx, App.tsx       entry and router
-      pages/                  Board, NoticeDetail, Login, committee/*, admin/*, Forbidden
-      components/             NoticeCard, NoticeForm, Filters, Pagination, Toast, RouteGuard
-      store/                  sessionStore, noticesStore, uiStore
-      lib/                    api.ts (fetch + silent refresh), socket.ts, format.ts
-      styles/                 tailwind entry
+      main.tsx, App.tsx       entry, fonts, router, scroll to top
+      pages/                  Board, NoticeDetail, Login, Forbidden, NotFound, account/, committee/, admin/
+      components/             Layout, NoticeCard, NoticeForm, Filters, Pagination, RouteGuard, AdminNav
+      store/                  sessionStore, noticesStore
+      lib/                    api.ts, socket.ts, format.ts, category.ts, useTitle.ts
+      index.css               shared button, field, badge classes (tokens are in tailwind.config.js)
     tailwind.config.js
-    tests/                    component tests
-  e2e/                        Playwright specs
+    (tests sit next to the code as *.test.tsx; live.test.tsx covers the socket)
+  e2e/                        Playwright specs, test server, helpers
 ```
 
 ## 5. Database design
@@ -134,7 +345,7 @@ Database `noticeboard`. Mongoose is configured with `strictQuery: true` and `san
 | Field | Type | Rules |
 |-------|------|-------|
 | `userId` | ObjectId ref users | required, indexed |
-| `tokenHash` | string | required, unique (SHA-256 of the token plus pepper) |
+| `tokenHash` | string | required, unique (HMAC-SHA256 of the token with the pepper) |
 | `family` | string | groups rotated tokens for reuse detection |
 | `revoked` | boolean | default false |
 | `expiresAt` | Date | TTL index, expireAfterSeconds 0 |
@@ -169,7 +380,7 @@ Indexes:
 Public visibility rule (one shared query builder used by all public endpoints and by the socket emitter): `status = "published"` AND (`expiresAt` is null OR `expiresAt` > now).
 
 ### GridFS bucket `images`
-`fs.files` / `fs.chunks` with `metadata: { noticeId, uploaderId, contentType, sha256 }`. Files not referenced by a notice after 24 h are deleted by the cleanup script.
+`images.files` / `images.chunks` with `metadata: { noticeId, uploaderId, contentType, sha256, alt }`. `noticeId` is empty until a notice that lists the image is saved. Files not referenced by a notice after 24 h are deleted by the cleanup script.
 
 ### Collection `auditLogs`
 | Field | Type | Rules |
@@ -203,7 +414,7 @@ Connection string template (`.env.example`):
 (use `localhost` instead of `mongo` when running the server outside Docker; Atlas uses a `mongodb+srv://` string with the same app user).
 
 ### Seed data
-`scripts/seed-admin.ts` reads `SEED_ADMIN_EMAIL`, `SEED_ADMIN_NAME`, `SEED_ADMIN_PASSWORD` from the environment, creates the first admin (with `mustChangePassword: true`) only if none exists, and adds a few default categories. Nothing is hard-coded.
+`scripts/seed-admin.ts` reads `SEED_ADMIN_EMAIL`, `SEED_ADMIN_NAME`, `SEED_ADMIN_PASSWORD` from the environment, creates the first admin (with `mustChangePassword: true`) only if none exists, and adds a few default categories. Nothing is hard-coded. `scripts/seed-demo.ts` (`npm run seed:demo`) is separate and optional: 14 demo committee members (email domain `demo.college.test`, no admin), 10 categories and about 180 notices in every state with generated poster images; `--reset` removes only that demo data.
 
 ## 6. Access control design
 
@@ -211,7 +422,7 @@ Connection string template (`.env.example`):
 
 **Session bootstrap:** the client calls `GET /api/auth/me` on load; 401 means "no session".
 
-**Refresh:** `POST /api/auth/refresh` checks the refresh token hash, marks it used and issues a new pair in the same family. A used token presented again revokes the whole family. The client API wrapper calls refresh once on a 401 and retries the request.
+**Refresh:** `POST /api/auth/refresh` checks the refresh token hash, marks it used and issues a new pair in the same family. A used token presented again revokes every refresh token of that user. The client API wrapper calls refresh once on a 401 and retries the request.
 
 **Revocation:** logout, password change, disabling a user and password reset revoke refresh tokens. Access tokens expire within 15 minutes; `active` is re-checked on refresh and on admin actions. Sockets are disconnected at access token expiry.
 
@@ -219,21 +430,23 @@ Connection string template (`.env.example`):
 
 **Permission table:** identical to PRD Section 5.
 
-**Request order (every REST request):**
-1. helmet headers.
-2. Rate limiter.
-3. Origin check (non-GET).
-4. Body parsing with a size limit.
-5. Auth middleware (JWT cookie, optional on public routes).
-6. `requireRole()` on protected routes.
-7. Zod validation of params, query and body.
-8. Service: object-level check (`authorId === user.id` unless admin).
-9. Query with sanitised filters.
-10. Audit entry for writes, socket emit after a successful write.
+**Request order (every REST request, see the flowchart in section 1.2):**
+1. helmet headers (CSP, nosniff, frame protection, HSTS in production).
+2. Built website files in production (before the limiter, so loading a page does not use up the read allowance).
+3. Read limiter: GET and HEAD, 120 per minute per IP.
+4. JSON body parsing, 100 KB limit, then cookie parsing.
+5. Operator-key rejection: any key starting with `$` or containing `.` in the body, query or params gives 400.
+6. Auth middleware (JWT cookie, optional on public routes).
+7. Origin check on every method except GET, HEAD and OPTIONS (a missing Origin is refused).
+8. Write limiter: 30 per minute per user (per IP when anonymous).
+9. `requireRole()` on protected routes.
+10. Zod validation of params, query and body.
+11. Service: object-level check (`authorId === user.id` unless admin), query with sanitised filters.
+12. Audit entry for writes, socket announce after a successful write.
 
-**Socket request order:** origin check, connection rate limit, cookie JWT verify (optional), join rooms, payload validation on any client-sent message (the server accepts none beyond the connection itself, so clients cannot send data).
+**Socket request order:** origin check (a request with an Origin other than `APP_ORIGIN` is refused), connection rate limit (20 per minute per IP), cookie JWT verify (optional), join rooms, and a timer that disconnects the socket when its access token expires. The server registers no handler for client messages, so clients cannot send data.
 
-**Client guards:** `RouteGuard` redirects to `/login` when the session store has no user and shows `Forbidden` for the wrong role. Admin and committee page bundles are lazy-loaded.
+**Client guards (flowchart in section 1.4):** `RouteGuard` redirects to `/login` when the session store has no user, shows `Forbidden` for the wrong role and sends a user with a temporary password to `/account/password`. Admin and committee page bundles are lazy-loaded.
 
 **Public routes:** `/`, `/notices/:id`, `/login` (pages); `GET /api/notices`, `GET /api/notices/:id`, `GET /api/images/:id` (only if its notice is public), `GET /api/categories`, `GET /api/health`, `POST /api/auth/login`, `POST /api/auth/refresh`, `GET /api/auth/me` (returns 401 without a session); socket connection (public room only).
 
@@ -272,12 +485,12 @@ Common error format: `{ "error": { "code": "FORBIDDEN", "message": "...", "field
 
 | Event | Room | Payload | When |
 |-------|------|---------|------|
-| `notice:created` | `public` | card summary (id, title, category, publishedAt, pinned, firstImageId, expiresAt) | a notice becomes public |
-| `notice:updated` | `public` | same summary | a public notice is edited or pinned/unpinned |
+| `notice:created` | `public` | the public notice (id, title, body, category, images, pinned, publishedAt, expiresAt, createdAt, updatedAt) | a notice becomes public |
+| `notice:updated` | `public` | same shape | a public notice is edited or pinned or unpinned |
 | `notice:removed` | `public` | `{ id }` | a public notice is archived, deleted or unpublished |
-| `notice:changed` | `user:<authorId>` and `admin` | summary plus `status` | any change, including drafts and archived |
+| `notice:changed` | `user:<authorId>` and `admin` | the same plus `status` and `authorId` | any change, including drafts and archived (decision chart in section 1.5) |
 
-Rules: payloads never contain hashes or private fields; clients cannot emit events (the server ignores incoming events). FR-14 (auto-expiry) uses the shared visibility query on the server and a 30 s client timer comparing `expiresAt`. FR-19 to FR-21 are implemented by middleware, the validation layer and the rate limiter rather than by endpoints.
+Rules: payloads never contain hashes or private fields; clients cannot emit events (the server ignores incoming events). FR-14 (auto-expiry) uses the shared visibility query on the server and a 30 s client timer comparing `expiresAt`. The client does not patch cards from the payload: any public event reloads the current view, so the server's own filters decide what appears. FR-19 to FR-21 are implemented by middleware, the validation layer and the rate limiter rather than by endpoints.
 
 ## 8. Frontend architecture
 
@@ -286,20 +499,22 @@ Rules: payloads never contain hashes or private fields; clients cannot emit even
 | `/` | public | Board: search box, category and date filters, paged cards, pinned first, live updates |
 | `/notices/:id` | public | Full notice and images |
 | `/login` | public | Login form |
-| `/committee` | committee, admin | My notices with status filter |
+| `/committee` | committee, admin | My notices with status filter (admins see everyone's and can pin) |
 | `/committee/new`, `/committee/:id/edit` | committee, admin (own for committee) | Notice form with image upload and alt text |
+| `/account/password` | committee, admin | Change own password (forced first for temporary passwords) |
+| `/admin` | admin | Overview cards linking to the admin pages |
 | `/admin/users` | admin | Create, disable, reset users |
 | `/admin/categories` | admin | Category CRUD |
 | `/admin/audit` | admin | Audit log |
-| `/forbidden`, `*` | public | 403 and 404 pages |
+| `*` | public | 404 page (the 403 page is shown by the route guard in place of a forbidden area) |
 
-- **Tailwind:** mobile-first utility classes; a small set of reusable components (card, button, input) so styles stay consistent; breakpoints at 640 / 1024 px; focus rings never removed.
-- **Route guards:** `RouteGuard` wraps `/committee/*` and `/admin/*`; it waits for `GET /api/auth/me`, then redirects or renders. API errors 401/403 also clear the session or show the forbidden page.
-- **State:** `sessionStore`, `noticesStore`, `uiStore` (Section 3). `noticesStore.reload()` re-fetches the current view (debounced 300 ms) when a public socket event arrives, so the server's own filters decide what appears; `dropExpired()` runs every 30 s.
-- **Socket module:** connects after the session check, reconnects automatically, and on reconnect refetches the current page to cover missed events; shows a small "live" indicator (`aria-live`).
-- **Forms:** same Zod schemas from `shared/` on client (fast feedback) and server (authoritative).
+- **Tailwind and the design system:** mobile-first utility classes. Tokens live in `client/tailwind.config.js`: paper, ink, signal blue, marigold (only for Pinned and the live dot), line, edge, muted, and a colour pair per category. The old grey scale is mapped onto the same palette. Shared classes (`btn`, `btn-primary`, `btn-quiet`, `field`, `panel`, `badge`, `page-title`) are defined once in `index.css`. Fonts (Bricolage Grotesque for headings, Public Sans for text) are bundled with the site, because the CSP allows fonts only from the app's own address. A category's colour comes from its name (`lib/category.ts`), so no database field is needed. One focus style everywhere, and animation is off under `prefers-reduced-motion`.
+- **Route guards:** `GuardedOutlet` (a `RouteGuard` plus lazy loading) wraps `/committee/*`, `/account/*` and `/admin/*`; it waits for `GET /api/auth/me`, then redirects or renders. A failed silent refresh clears the session.
+- **State:** `sessionStore`, `noticesStore` and `useLiveStore` (Section 3). Notices that arrive through a live reload are marked "fresh" for 8 seconds for a highlight. `noticesStore.reload()` re-fetches the current view (debounced 300 ms) when a public socket event arrives, so the server's own filters decide what appears; `dropExpired()` runs every 30 s.
+- **Socket module:** connects after the session check and again whenever the signed-in user changes (so the server assigns the right rooms), reconnects automatically, signs in again quietly when the server drops it for an expired token, refetches the current page after any gap, and shows a "Live" or "Reconnecting" indicator (`aria-live`).
+- **Forms:** HTML constraints and light checks in the client for fast feedback; the server's Zod schemas are authoritative and their field messages are shown next to the fields.
 - **Loading and error states:** every list and form has loading, empty and error views.
-- **Accessibility:** semantic HTML, labelled inputs, required `alt` text for images, keyboard focus order, 4.5:1 contrast, live region for new notices.
+- **Accessibility:** semantic HTML, labelled inputs, required `alt` text for images, keyboard focus order, 4.5:1 contrast (checked by an automated scan of every main page), live region for the connection status, per-page tab titles. Filters fold behind a button on phones.
 - **Image display:** the original file is shown with `max-width: 100%`; no server-side scaling.
 
 ## 9. Security architecture
@@ -350,25 +565,25 @@ VITE_API_BASE=/api                           # client API path (proxied in dev)
 
 ## 11. Testing strategy
 
-- **Unit:** Zod schemas (including `$ne`, `$where`, dotted keys), JWT sign/verify, bcrypt helpers, visibility query builder, image type check, `noticesStore.applyEvent()`.
+- **Unit:** Zod schemas (including `$ne`, `$where`, dotted keys), JWT sign/verify, bcrypt helpers, visibility query builder, image type check, category colour rule, `noticesStore` live reload and fresh marks.
 - **Integration (in-memory MongoDB, Supertest):** every endpoint in Section 7; refresh rotation and reuse detection; SHA-256 of downloaded image equals upload; expiry hides a notice; search with injection strings returns normal results; `/api/health` returns 503 when the database is down.
 - **Socket tests (`socket.io-client`):** an anonymous client gets `notice:created` within 2 s of a publish; an anonymous client never gets a draft event; the author gets `notice:changed` for their draft and another committee member does not; admin gets all; a socket with an expired token is disconnected; a disallowed Origin is refused.
 - **Access-control tests (explicit):** for each protected route and action, call as anonymous, committee A, committee B, and admin, and assert the PRD Section 5 result. Specific cases: committee B edits/deletes committee A's notice (403), committee B reads A's draft or draft image (404/403), committee opens `/admin` (403 page), anonymous opens `/committee` (redirect), disabled user refresh (401), committee pins (403), committee creates user (403).
-- **Component tests:** `RouteGuard` redirect and forbidden cases, `NoticeForm` validation messages, board renders a live-inserted card.
-- **End to end (Playwright):** viewer reads and searches; committee logs in, posts with an image, and a second open viewer tab shows it without refresh; viewer typing `/admin` is sent to `/login`.
-- **Pipeline:** the CI workflow runs lint, type check, all tests and the Docker build; a red step blocks publishing the image.
+- **Component tests (React Testing Library with a fake socket):** route guards, sign-in, board filters and paging, live reload, fresh highlight, committee and admin screens, `NoticeForm` messages.
+- **End to end (Playwright, `npm run e2e`):** a throwaway server on the production build; viewer reads and searches; committee logs in, posts with an image, and a second open viewer window follows the edit and archive without refresh; viewer typing `/admin` is sent to `/login`; admin pins and finds the audit entries. An axe scan (WCAG 2.1 A and AA) and a content-security-policy console check run on every main page.
+- **Pipeline:** the CI workflow runs lint, `npm audit`, type check, all tests and build (`check`), the browser test (`e2e`) and the Docker build (`image`); a red step blocks publishing the image. Flowchart in section 1.8.
 
 ## 12. Deployment and operations
 
 - **Local development:** `docker compose up -d mongo` (MongoDB with authentication and `scripts/mongo-init.js`), `npm run seed`, then `npm run dev` (server on 4000, Vite on 5173 proxying `/api` and `/socket.io`).
 - **Local containers:** `docker compose up --build` runs the app image and MongoDB; the app is at `http://localhost:3000`. The compose file defines health checks (`/api/health` for the app, a ping for MongoDB), a named volume for MongoDB data and reads passwords from `.env`.
-- **Dockerfile:** stage 1 builds the client (`vite build`), stage 2 builds the server (TypeScript to JS), stage 3 is `node:20-alpine` with only production dependencies, the compiled server, the built client, `USER node`, `EXPOSE 3000`, and a `HEALTHCHECK`.
-- **CI (`.github/workflows/ci.yml`):** on push and pull request: checkout, Node 20, `npm ci`, lint, type check, tests (MongoDB memory server), client and server build, `docker build`. On `main` only: log in to the container registry and push the image tagged with the commit SHA and `latest`.
+- **Dockerfile:** stage 1 builds the client (`vite build`) and the server (TypeScript to JS); stage 2 is `node:20-alpine` with only production dependencies, the compiled server, the built client (`CLIENT_DIST`), `USER node`, `EXPOSE 3000`, and a `HEALTHCHECK` on `/api/health`.
+- **CI (`.github/workflows/ci.yml`):** on push and pull request. Job `check`: Node 20, `npm ci`, lint, `npm audit` (high findings fail), type check, tests (MongoDB memory server), build. Job `e2e` (after `check`): Playwright and Chromium against the production build. Job `image` (after both): `docker build` every run; on `main` only it logs in to GitHub Container Registry and pushes the image tagged with the commit SHA and `latest`. Third-party actions are pinned to commit IDs.
 - **Deploy:** create a MongoDB Atlas cluster and an `noticeboard_app` user with `readWrite` on `noticeboard`, allow the host's IPs; create a Render web service from the image; set all environment variables there (`MONGODB_URI` with the Atlas string, `APP_ORIGIN` with the public URL, secrets created by running `openssl rand -base64 32`); set the health check path to `/api/health`; run the seed script once. Render provides HTTPS and WebSocket support.
 - **Logging:** structured JSON to stdout, never containing passwords, tokens or full request bodies.
-- **Backups:** nightly `mongodump --uri <backup user> --gzip --out <dir>` (Atlas snapshots if used), keep 14 days.
-- **Restore:** `mongorestore --gzip --drop <dir>` into an empty database; verify by loading the board.
-- **Cleanup:** monthly `npm run cleanup`.
+- **Backups:** `mongodump --archive --gzip` with the read-only `noticeboard_ro` user (exact commands in the README), kept 14 days; Atlas snapshots if used.
+- **Restore:** `mongorestore --gzip --archive --drop` with the administrator user (README); verify by loading the board.
+- **Cleanup:** about monthly `npm run cleanup` (`--dry-run` previews): deletes notices expired over a year ago with their images, and uploads never attached after 24 hours. Take a backup first.
 
 ## 13. Decision log
 
@@ -397,6 +612,8 @@ VITE_API_BASE=/api                           # client API path (proxied in dev)
 | M6 | `realtime/socket.ts`, `realtime/events.ts`, emit hooks in `noticeService`, client `socket.ts`, store event handling, expiry timer (FR-22, FR-23, FR-14 client) |
 | M7 | `Dockerfile`, `.dockerignore`, full compose stack, `.github/workflows/ci.yml`, deployment guide |
 | M8 | helmet/CSP, cleanup script, full access-control and socket test matrix, Playwright flow, README with demo script |
+
+| After M8 | `seed-demo.ts`, the interface redesign (design tokens, board rows, pinned cards, fresh highlight), filters on phones, per-page titles, favicon |
 
 Requirement coverage: FR-01 to FR-04 and FR-24 use `users`, `refreshTokens`, `auditLogs`; FR-05, FR-06 use `users`, `refreshTokens`, `auditLogs`; FR-07 uses `categories`, `notices`; FR-08 uses `auditLogs`; FR-09 to FR-18 use `notices`, GridFS, `categories`; FR-19 to FR-21 are cross-cutting (middleware, guards, validation, limiter); FR-22 and FR-23 use `notices` and the Socket.IO rooms. Every collection is used by at least one requirement.
 
