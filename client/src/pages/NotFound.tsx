@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom";
+import { useTitle } from "../lib/useTitle";
 
 export default function NotFound() {
+  useTitle("Page not found");
   return (
     <div className="panel max-w-xl">
       <h1 className="mb-2 font-display text-3xl font-bold">Page not found</h1>

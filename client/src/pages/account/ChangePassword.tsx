@@ -2,11 +2,13 @@ import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { ApiError } from "../../lib/api";
 import { useSessionStore } from "../../store/sessionStore";
+import { useTitle } from "../../lib/useTitle";
 
 const MIN_LENGTH = 10; // same minimum as the server
 const input = "field";
 
 export default function ChangePassword() {
+  useTitle("Change password");
   const { user, changePassword } = useSessionStore();
   const navigate = useNavigate();
   const [errors, setErrors] = useState<Record<string, string>>({});

@@ -4,6 +4,7 @@ import Pagination from "../../components/Pagination";
 import { ApiError, api } from "../../lib/api";
 import { formatDateTime } from "../../lib/format";
 import { useSessionStore, type Role } from "../../store/sessionStore";
+import { useTitle } from "../../lib/useTitle";
 
 type AdminUser = {
   id: string;
@@ -32,6 +33,7 @@ const messageFor = (err: unknown) => {
 };
 
 export default function AdminUsers() {
+  useTitle("Users");
   const me = useSessionStore((s) => s.user);
   const [params, setParams] = useSearchParams();
   const pageNo = Number(params.get("page")) || 1;

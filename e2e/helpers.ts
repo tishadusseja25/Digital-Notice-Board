@@ -17,7 +17,7 @@ export const PNG = Buffer.from(
 export async function signIn(page: Page, who: keyof typeof USERS, password = PASSWORD) {
   await page.goto("/login");
   await page.getByLabel("Email").fill(USERS[who].email);
-  await page.getByLabel("Password").fill(password);
+  await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
 }
 

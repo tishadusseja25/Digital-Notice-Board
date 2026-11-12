@@ -1,15 +1,18 @@
 import { useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 import Filters from "../components/Filters";
 import NoticeCard from "../components/NoticeCard";
 import Pagination from "../components/Pagination";
 import { subscribeLive } from "../lib/socket";
 import { useNoticesStore, type BoardQuery } from "../store/noticesStore";
+import { useTitle } from "../lib/useTitle";
 
 const KEYS = ["q", "category", "from", "to"] as const;
 
 export default function Board() {
+  useTitle();
   const [params, setParams] = useSearchParams();
+  const signedOut = (useLocation().state as { signedOut?: boolean } | null)?.signedOut;
   const { items, total, page, limit, loading, error, categories, fresh, load, loadCategories } =
     useNoticesStore();
   const pinned = items.filter((n) => n.pinned);
@@ -57,6 +60,11 @@ export default function Board() {
   return (
     <div>
       <h1 className="page-title">Latest notices</h1>
+      {signedOut && (
+        <p role="status" className="mb-6 rounded-lg border border-line bg-white p-3 text-sm">
+          You have been signed out.
+        </p>
+      )}
       <Filters
         key={queryKey}
         value={query}

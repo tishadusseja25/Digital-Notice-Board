@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import NoticeForm from "../../components/NoticeForm";
 import { ApiError, api } from "../../lib/api";
+import { useTitle } from "../../lib/useTitle";
 import type { Notice } from "../../store/noticesStore";
 
 type View =
@@ -13,6 +14,7 @@ type View =
 
 export default function NoticeEditor() {
   const { id } = useParams();
+  useTitle(id ? "Edit notice" : "New notice");
   const navigate = useNavigate();
   const [view, setView] = useState<View>(id ? { state: "loading" } : { state: "new" });
 

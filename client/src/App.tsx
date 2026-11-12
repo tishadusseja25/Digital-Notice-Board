@@ -1,5 +1,5 @@
 import { lazy, useEffect } from "react";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes, useLocation } from "react-router-dom";
 import AdminNav from "./components/AdminNav";
 import Layout from "./components/Layout";
 import { GuardedOutlet } from "./components/RouteGuard";
@@ -19,6 +19,15 @@ const AdminUsers = lazy(() => import("./pages/admin/Users"));
 const AdminCategories = lazy(() => import("./pages/admin/Categories"));
 const AdminAudit = lazy(() => import("./pages/admin/Audit"));
 
+/** A new page should start at the top, as it would after following a link on any website. */
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
+}
+
 export default function App() {
   const init = useSessionStore((s) => s.init);
   const status = useSessionStore((s) => s.status);
@@ -34,29 +43,32 @@ export default function App() {
   }, [status, userId]);
 
   return (
-    <Routes>
-      <Route element={<Layout />}>
-        <Route path="/" element={<Board />} />
-        <Route path="/notices/:id" element={<NoticeDetail />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/committee" element={<GuardedOutlet roles={["committee", "admin"]} />}>
-          <Route index element={<CommitteeHome />} />
-          <Route path="new" element={<NoticeEditor />} />
-          <Route path=":id/edit" element={<NoticeEditor />} />
-        </Route>
-        <Route path="/account" element={<GuardedOutlet roles={["committee", "admin"]} />}>
-          <Route path="password" element={<ChangePassword />} />
-        </Route>
-        <Route path="/admin" element={<GuardedOutlet roles={["admin"]} />}>
-          <Route element={<AdminNav />}>
-            <Route index element={<AdminHome />} />
-            <Route path="users" element={<AdminUsers />} />
-            <Route path="categories" element={<AdminCategories />} />
-            <Route path="audit" element={<AdminAudit />} />
+    <>
+      <ScrollToTop />
+      <Routes>
+        <Route element={<Layout />}>
+          <Route path="/" element={<Board />} />
+          <Route path="/notices/:id" element={<NoticeDetail />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/committee" element={<GuardedOutlet roles={["committee", "admin"]} />}>
+            <Route index element={<CommitteeHome />} />
+            <Route path="new" element={<NoticeEditor />} />
+            <Route path=":id/edit" element={<NoticeEditor />} />
           </Route>
+          <Route path="/account" element={<GuardedOutlet roles={["committee", "admin"]} />}>
+            <Route path="password" element={<ChangePassword />} />
+          </Route>
+          <Route path="/admin" element={<GuardedOutlet roles={["admin"]} />}>
+            <Route element={<AdminNav />}>
+              <Route index element={<AdminHome />} />
+              <Route path="users" element={<AdminUsers />} />
+              <Route path="categories" element={<AdminCategories />} />
+              <Route path="audit" element={<AdminAudit />} />
+            </Route>
+          </Route>
+          <Route path="*" element={<NotFound />} />
         </Route>
-        <Route path="*" element={<NotFound />} />
-      </Route>
-    </Routes>
+      </Routes>
+    </>
   );
 }

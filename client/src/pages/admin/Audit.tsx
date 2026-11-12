@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import Pagination from "../../components/Pagination";
 import { api } from "../../lib/api";
 import { formatDateTime } from "../../lib/format";
+import { useTitle } from "../../lib/useTitle";
 
 type Entry = {
   id: string;
@@ -16,6 +17,7 @@ type Entry = {
 type Page = { items: Entry[]; total: number; page: number; limit: number };
 
 export default function AdminAudit() {
+  useTitle("Audit log");
   const [params, setParams] = useSearchParams();
   const pageNo = Number(params.get("page")) || 1;
   const [data, setData] = useState<Page | null>(null);

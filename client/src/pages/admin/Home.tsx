@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useTitle } from "../../lib/useTitle";
 
 const AREAS = [
   {
@@ -16,6 +17,7 @@ const AREAS = [
 ];
 
 export default function AdminHome() {
+  useTitle("Admin area");
   return (
     <div>
       <h1 className="page-title">Admin area</h1>

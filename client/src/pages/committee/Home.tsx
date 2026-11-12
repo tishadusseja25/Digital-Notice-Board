@@ -7,6 +7,7 @@ import { formatDateTime } from "../../lib/format";
 import { subscribeLive } from "../../lib/socket";
 import type { Notice } from "../../store/noticesStore";
 import { useSessionStore } from "../../store/sessionStore";
+import { useTitle } from "../../lib/useTitle";
 
 const STATUS_STYLE = {
   published: "bg-cat-green-tint text-cat-green",
@@ -21,6 +22,7 @@ type Page = { items: Notice[]; total: number; page: number; limit: number };
 const button = "btn btn-quiet px-3 py-1";
 
 export default function CommitteeHome() {
+  useTitle("My notices");
   const [params, setParams] = useSearchParams();
   const location = useLocation();
   const isAdmin = useSessionStore((s) => s.user?.role === "admin");

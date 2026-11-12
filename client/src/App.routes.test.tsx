@@ -77,12 +77,15 @@ describe("route guards (page half of FR-19)", () => {
     expect(await screen.findByRole("heading", { name: "My notices" })).toBeInTheDocument();
   });
 
-  it("returns a signed-out user to the login page when they sign out inside an area", async () => {
+  it("takes a user who signs out inside an area to the notice board, with a message", async () => {
     server(user);
     renderAt("/committee");
     await screen.findByRole("heading", { name: "My notices" });
     fireEvent.click(screen.getByRole("button", { name: /sign out/i }));
-    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Latest notices" })).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("You have been signed out.");
+    // The staff area is closed again, and the header offers the way back to the board.
+    expect(screen.getByRole("link", { name: "Notice board" })).toHaveAttribute("href", "/");
   });
 
   it("shows a not-found page for unknown addresses", async () => {
@@ -107,6 +110,21 @@ describe("login page", () => {
     expect(await screen.findByRole("heading", { name: "My notices" })).toBeInTheDocument();
     const loginCall = fetchMock.mock.calls.find(([u]) => u === "/api/auth/login");
     expect(loginCall?.[1]?.body).toBe('{"email":"ann@example.com","password":"pw"}');
+  });
+
+  it("has a way back to the notice board, and can show the typed password", async () => {
+    server(null);
+    renderAt("/login");
+    await screen.findByRole("heading", { name: "Sign in" });
+    expect(screen.getByRole("link", { name: "Back to the notice board" })).toHaveAttribute(
+      "href",
+      "/",
+    );
+    const password = screen.getByLabelText("Password");
+    expect(password).toHaveAttribute("type", "password");
+    fireEvent.click(screen.getByLabelText("Show password"));
+    expect(password).toHaveAttribute("type", "text");
+    expect(document.title).toBe("Sign in · Digital Notice Board");
   });
 
   it("opens the admin area for an admin", async () => {

@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { ApiError } from "../lib/api";
 import { useSessionStore, type User } from "../store/sessionStore";
+import { useTitle } from "../lib/useTitle";
 
 const areaFor = (user: User) => (user.role === "admin" ? "/admin" : "/committee");
 // Only same-site paths: "//evil.example" or "https://..." in router state must never be followed.
@@ -17,11 +18,13 @@ const messageFor = (err: unknown) => {
 };
 
 export default function Login() {
+  useTitle("Sign in");
   const { user, login } = useSessionStore();
   const navigate = useNavigate();
   const location = useLocation();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [show, setShow] = useState(false);
 
   if (user) return <Navigate to={areaFor(user)} replace />;
 
@@ -66,12 +69,16 @@ export default function Login() {
           <input
             id="password"
             name="password"
-            type="password"
+            type={show ? "text" : "password"}
             required
             autoComplete="current-password"
             className={field}
           />
         </div>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={show} onChange={(e) => setShow(e.target.checked)} />
+          Show password
+        </label>
         {error && (
           <p
             role="alert"
@@ -84,6 +91,11 @@ export default function Login() {
           {busy ? "Signing in…" : "Sign in"}
         </button>
       </form>
+      <p className="mt-4 text-sm">
+        <Link to="/" className="font-semibold text-signal underline">
+          Back to the notice board
+        </Link>
+      </p>
     </div>
   );
 }

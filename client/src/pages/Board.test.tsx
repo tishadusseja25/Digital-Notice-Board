@@ -77,6 +77,30 @@ describe("Board", () => {
     expect(screen.getByRole("link", { name: "Notice 1" })).toHaveAttribute("href", "/notices/id1");
   });
 
+  it("sets the tab title, and folds the extra filters away on a phone until asked", async () => {
+    server(() => page([notice(1)]));
+    renderBoard();
+    await screen.findByRole("heading", { name: "Notice 1" });
+    expect(document.title).toBe("Digital Notice Board");
+    const toggle = screen.getByRole("button", { name: "Filters" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(toggle);
+    expect(screen.getByRole("button", { name: "Hide filters" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+  });
+
+  it("opens the filters already when one is in the address, and counts it on the button", async () => {
+    server(() => page([notice(1)]));
+    renderBoard("/?category=c1&from=2026-01-01");
+    await screen.findByRole("heading", { name: "Notice 1" });
+    expect(screen.getByRole("button", { name: "Hide filters" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+  });
+
   it("shows an empty message when nothing matches", async () => {
     server(() => page([]));
     renderBoard();

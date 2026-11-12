@@ -4,6 +4,7 @@ import { ApiError, api } from "../lib/api";
 import { categoryStyle } from "../lib/category";
 import { formatDateTime } from "../lib/format";
 import { subscribeLive } from "../lib/socket";
+import { useTitle } from "../lib/useTitle";
 import type { Notice } from "../store/noticesStore";
 
 type View =
@@ -12,6 +13,7 @@ type View =
 export default function NoticeDetail() {
   const { id } = useParams();
   const [view, setView] = useState<View>({ state: "loading" });
+  useTitle(view.state === "ok" ? view.notice.title : "Notice");
 
   useEffect(() => {
     let current = true; // ignore the answer if the visitor already moved on

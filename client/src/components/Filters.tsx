@@ -17,6 +17,9 @@ export default function Filters({ value, categories, onSearch }: Props) {
     from: value.from ?? "",
     to: value.to ?? "",
   });
+  // On a phone the extra filters start folded away (open when one is already in use).
+  const [open, setOpen] = useState(Boolean(value.category || value.from || value.to));
+  const active = [draft.category, draft.from, draft.to].filter(Boolean).length;
   const set = (key: keyof typeof draft) => (e: { target: { value: string } }) =>
     setDraft({ ...draft, [key]: e.target.value });
 
@@ -49,40 +52,51 @@ export default function Filters({ value, categories, onSearch }: Props) {
           className={field}
         />
       </div>
-      <div>
-        <label htmlFor="category" className={label}>
-          Category
-        </label>
-        <select id="category" value={draft.category} onChange={set("category")} className={field}>
-          <option value="">All categories</option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="grid grid-cols-2 gap-3 lg:contents">
+      <div id="filter-fields" className={`${open ? "grid" : "hidden"} gap-3 sm:contents`}>
         <div>
-          <label htmlFor="from" className={label}>
-            From
+          <label htmlFor="category" className={label}>
+            Category
           </label>
-          <input
-            id="from"
-            type="date"
-            value={draft.from}
-            onChange={set("from")}
-            className={field}
-          />
+          <select id="category" value={draft.category} onChange={set("category")} className={field}>
+            <option value="">All categories</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
         </div>
-        <div>
-          <label htmlFor="to" className={label}>
-            To
-          </label>
-          <input id="to" type="date" value={draft.to} onChange={set("to")} className={field} />
+        <div className="grid grid-cols-2 gap-3 lg:contents">
+          <div>
+            <label htmlFor="from" className={label}>
+              From
+            </label>
+            <input
+              id="from"
+              type="date"
+              value={draft.from}
+              onChange={set("from")}
+              className={field}
+            />
+          </div>
+          <div>
+            <label htmlFor="to" className={label}>
+              To
+            </label>
+            <input id="to" type="date" value={draft.to} onChange={set("to")} className={field} />
+          </div>
         </div>
       </div>
-      <div className="flex gap-2 sm:col-span-2 lg:col-span-1">
+      <div className="flex flex-wrap gap-2 sm:col-span-2 lg:col-span-1">
+        <button
+          type="button"
+          className="btn btn-quiet sm:hidden"
+          aria-expanded={open}
+          aria-controls="filter-fields"
+          onClick={() => setOpen(!open)}
+        >
+          {open ? "Hide filters" : active > 0 ? `Filters (${active})` : "Filters"}
+        </button>
         <button type="submit" className="btn btn-primary">
           Search
         </button>

@@ -1,10 +1,11 @@
-import { Link, Outlet } from "react-router-dom";
+import { Link, Outlet, useNavigate } from "react-router-dom";
 import { useLiveStore } from "../lib/socket";
 import { useSessionStore } from "../store/sessionStore";
 
 export default function Layout() {
   const { user, status, logout } = useSessionStore();
   const live = useLiveStore((s) => s.status);
+  const navigate = useNavigate();
   const area = user?.role === "admin" ? "/admin" : "/committee";
   const onDark = "underline decoration-white/40 hover:decoration-white";
 
@@ -22,7 +23,9 @@ export default function Layout() {
             <Link to="/" className="font-display text-xl font-bold tracking-tight sm:text-2xl">
               Digital Notice Board
             </Link>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-xs font-semibold">
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-xs font-semibold ${live === "connecting" ? "opacity-0" : ""}`}
+            >
               <span
                 aria-hidden="true"
                 className={`h-2 w-2 rounded-full ${live === "live" ? "animate-pulse bg-marigold" : live === "offline" ? "bg-white/50" : "bg-transparent"}`}
@@ -33,6 +36,9 @@ export default function Layout() {
             </span>
           </div>
           <nav aria-label="Account" className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+            <Link to="/" className={onDark}>
+              Notice board
+            </Link>
             {status === "ready" && user && (
               <>
                 <Link to={area} className={onDark}>
@@ -43,7 +49,11 @@ export default function Layout() {
                 </Link>
                 <button
                   type="button"
-                  onClick={() => void logout()}
+                  onClick={() => {
+                    // Leave the staff page first, so signing out lands on the board, not the login form.
+                    navigate("/", { state: { signedOut: true } });
+                    void logout();
+                  }}
                   className="btn border border-white/50 px-3 py-1 text-white hover:bg-white/10"
                 >
                   Sign out

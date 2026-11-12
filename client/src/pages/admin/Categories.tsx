@@ -1,6 +1,7 @@
 import { categoryStyle } from "../../lib/category";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { ApiError, api } from "../../lib/api";
+import { useTitle } from "../../lib/useTitle";
 
 type Category = { id: string; name: string };
 type Pending = { id: string; kind: "rename" | "delete" } | null;
@@ -14,6 +15,7 @@ const messageFor = (err: unknown) => {
 };
 
 export default function AdminCategories() {
+  useTitle("Categories");
   const [items, setItems] = useState<Category[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<Pending>(null);

@@ -32,3 +32,10 @@
 - The stretched-link cards on the admin overview rely on the `<li>` being `relative`; removing that makes the whole page clickable.
 - The seeded demo data makes layout problems visible (long titles, many pinned notices, images); use `npm run seed:demo` when reviewing UI changes.
 - Dark mode is out of scope (PRD).
+
+## Follow-up details (after the first review)
+- **Filters fold away on phones.** `Filters.tsx` keeps Search always visible; category and dates sit in `#filter-fields`, which is `hidden` below `sm` until the "Filters" button (`aria-expanded`, `aria-controls`) opens it, and `sm:contents` puts the fields back into the form grid from `sm` up. It starts open when category or dates are already in the address, and the button shows the count ("Filters (2)"). Tests find the fields by label, which works with the fields folded because they stay in the DOM.
+- **Sign out lands on the board.** `Layout` navigates to `/` with router state `{ signedOut: true }` before calling `logout()`; otherwise the route guard would redirect the emptied session to `/login` first. `Board` shows "You have been signed out." (`role="status"`) from that state. The header always has a "Notice board" link, and the sign-in page has "Back to the notice board".
+- **Small details:** per-page tab titles through `lib/useTitle.ts` ("Users · Digital Notice Board"), an SVG favicon (`client/public/favicon.svg`) plus description and theme colour in `index.html`, scroll to top on route change (`ScrollToTop` in `App.tsx`; `window.scrollTo` is stubbed in `setupTests.ts` because jsdom does not implement it), a "Show password" checkbox on sign-in, and the live pill is invisible (not removed) while the socket is still connecting, so the `aria-live` region stays in place.
+- **e2e:** `getByLabel("Password")` now also matches "Show password", so the sign-in helper uses `{ exact: true }`.
+- **One admin.** The demo seed no longer creates admins; the single admin is the account from `npm run seed`.
