@@ -27,6 +27,10 @@ npm run dev                 # starts both: server on :4000, client on :5173
 
 Open http://localhost:5173. Sign in with the `SEED_ADMIN_*` values from `.env`; you must set a new password at first sign-in.
 
+## Demo data
+
+`npm run seed:demo` fills the database with a lived-in board: 3 admins, 14 committee members (one disabled), 10 categories and about 180 notices in every state (published, expiring soon, expired, draft, archived, 3 pinned) with 76 generated poster images stored in GridFS. Everyone signs in with the password `Demo-pass-2026`; for example `meera.iyer@demo.college.test` (admin) or `rohan.deshmukh@demo.college.test` (committee). All demo accounts use the email domain `demo.college.test`. Run it again with `-- --reset` to replace the demo data (nothing else is touched). It refuses to run against a hosted `mongodb+srv` database unless you add `--force`. Do not use it for a real deployment: the password is public.
+
 ## Run everything in Docker
 
 ```sh

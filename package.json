@@ -19,7 +19,8 @@
     "format": "prettier --write .",
     "seed": "tsx --env-file=.env scripts/seed-admin.ts",
     "cleanup": "tsx --env-file=.env scripts/cleanup.ts",
-    "e2e": "npm run build && playwright test"
+    "e2e": "npm run build && playwright test",
+    "seed:demo": "tsx --env-file=.env scripts/seed-demo.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
