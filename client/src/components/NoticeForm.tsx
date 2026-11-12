@@ -19,8 +19,8 @@ const toLocalInput = (iso: string | null) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
-const input = "w-full rounded border border-slate-300 bg-white px-3 py-2";
-const label = "block text-sm font-medium";
+const input = "field";
+const label = "field-label";
 
 type Props = { initial?: Notice; onSaved: () => void };
 
@@ -130,7 +130,7 @@ export default function NoticeForm({ initial, onSaved }: Props) {
   const describedBy = (name: string) => (errors[name] ? `${name}-error` : undefined);
 
   return (
-    <form onSubmit={submit} className="space-y-5" noValidate={false}>
+    <form onSubmit={submit} className="panel space-y-5" noValidate={false}>
       <div>
         <label htmlFor="title" className={label}>
           Title
@@ -223,8 +223,8 @@ export default function NoticeForm({ initial, onSaved }: Props) {
         {fieldError("expiresAt")}
       </div>
 
-      <fieldset className="rounded border border-slate-200 bg-white p-4">
-        <legend className="px-1 text-sm font-medium">
+      <fieldset className="rounded-md border border-line p-4">
+        <legend className="px-1 text-sm font-semibold">
           Images ({images.length} of {MAX_IMAGES})
         </legend>
         <p className="mb-3 text-sm text-slate-700">
@@ -245,7 +245,7 @@ export default function NoticeForm({ initial, onSaved }: Props) {
                   type="button"
                   onClick={() => void remove(image)}
                   aria-label={`Remove image: ${image.alt}`}
-                  className="rounded border border-slate-300 px-3 py-1 text-sm hover:bg-slate-100"
+                  className="btn btn-quiet px-3 py-1"
                 >
                   Remove
                 </button>
@@ -290,11 +290,7 @@ export default function NoticeForm({ initial, onSaved }: Props) {
           {formError}
         </p>
       )}
-      <button
-        type="submit"
-        disabled={saving || uploading}
-        className="rounded bg-slate-900 px-4 py-2 text-white hover:bg-slate-700 disabled:opacity-60"
-      >
+      <button type="submit" disabled={saving || uploading} className="btn btn-primary">
         {saving ? "Saving…" : initial ? "Save changes" : "Create notice"}
       </button>
     </form>

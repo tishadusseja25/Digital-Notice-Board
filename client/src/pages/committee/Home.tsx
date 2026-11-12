@@ -2,18 +2,23 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import Pagination from "../../components/Pagination";
 import { ApiError, api } from "../../lib/api";
+import { categoryStyle } from "../../lib/category";
 import { formatDateTime } from "../../lib/format";
 import { subscribeLive } from "../../lib/socket";
 import type { Notice } from "../../store/noticesStore";
 import { useSessionStore } from "../../store/sessionStore";
 
+const STATUS_STYLE = {
+  published: "bg-cat-green-tint text-cat-green",
+  draft: "bg-cat-orange-tint text-cat-orange",
+  archived: "bg-cat-slate-tint text-cat-slate",
+} as const;
 const STATUSES = ["draft", "published", "archived"] as const;
 type Pending = { id: string; action: "archive" | "delete" } | null;
 
 type Page = { items: Notice[]; total: number; page: number; limit: number };
 
-const button =
-  "rounded border border-slate-300 bg-white px-3 py-1 text-sm hover:bg-slate-100 disabled:opacity-50";
+const button = "btn btn-quiet px-3 py-1";
 
 export default function CommitteeHome() {
   const [params, setParams] = useSearchParams();
@@ -102,11 +107,8 @@ export default function CommitteeHome() {
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold">My notices</h1>
-        <Link
-          to="/committee/new"
-          className="rounded bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-700"
-        >
+        <h1 className="page-title !mb-0">My notices</h1>
+        <Link to="/committee/new" className="btn btn-primary">
           New notice
         </Link>
       </div>
@@ -126,7 +128,7 @@ export default function CommitteeHome() {
           id="status"
           value={status}
           onChange={(e) => setFilter(e.target.value)}
-          className="rounded border border-slate-300 bg-white px-3 py-2 text-sm"
+          className="field w-auto"
         >
           <option value="">All notices</option>
           {STATUSES.map((s) => (
@@ -151,24 +153,18 @@ export default function CommitteeHome() {
               n.status === "published" && !!n.expiresAt && new Date(n.expiresAt).getTime() < now;
             const confirming = pending?.id === n.id ? pending.action : null;
             return (
-              <li key={n.id} className="rounded-lg border border-slate-200 bg-white p-4">
+              <li key={n.id} className="rounded-lg border border-line bg-white p-4">
                 <div className="mb-1 flex flex-wrap items-center gap-2 text-xs">
-                  <span className="rounded bg-slate-100 px-2 py-0.5 font-semibold capitalize">
+                  <span className={`badge capitalize ${STATUS_STYLE[n.status ?? "draft"]}`}>
                     {n.status}
                   </span>
-                  {n.pinned && (
-                    <span className="rounded bg-amber-100 px-2 py-0.5 font-semibold text-amber-900">
-                      Pinned
-                    </span>
-                  )}
-                  {expired && (
-                    <span className="rounded bg-amber-100 px-2 py-0.5 font-semibold text-amber-900">
-                      Expired
-                    </span>
-                  )}
-                  <span className="text-slate-600">{n.category.name}</span>
+                  {n.pinned && <span className="badge bg-marigold text-ink">Pinned</span>}
+                  {expired && <span className="badge bg-cat-red-tint text-cat-red">Expired</span>}
+                  <span className={`badge ${categoryStyle(n.category.name).chip}`}>
+                    {n.category.name}
+                  </span>
                 </div>
-                <h2 className="text-lg font-semibold">
+                <h2 className="font-display text-lg font-bold">
                   <Link to={`/notices/${n.id}`} className="hover:underline">
                     {n.title}
                   </Link>

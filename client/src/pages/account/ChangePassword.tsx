@@ -4,7 +4,7 @@ import { ApiError } from "../../lib/api";
 import { useSessionStore } from "../../store/sessionStore";
 
 const MIN_LENGTH = 10; // same minimum as the server
-const input = "w-full rounded border border-slate-300 bg-white px-3 py-2";
+const input = "field";
 
 export default function ChangePassword() {
   const { user, changePassword } = useSessionStore();
@@ -44,7 +44,7 @@ export default function ChangePassword() {
     );
   const field = (name: string, text: string, autoComplete: string) => (
     <div>
-      <label htmlFor={name} className="block text-sm font-medium">
+      <label htmlFor={name} className="field-label">
         {text}
       </label>
       <input
@@ -63,13 +63,13 @@ export default function ChangePassword() {
 
   return (
     <div className="mx-auto max-w-sm">
-      <h1 className="mb-4 text-2xl font-bold">Change password</h1>
+      <h1 className="page-title">Change password</h1>
       {user?.mustChangePassword && (
         <p className="mb-4 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
           You are using a temporary password. Choose a new one to continue.
         </p>
       )}
-      <form onSubmit={submit} className="space-y-4">
+      <form onSubmit={submit} className="panel space-y-4">
         {field("current", "Current password", "current-password")}
         {field("next", "New password", "new-password")}
         {field("confirm", "Repeat new password", "new-password")}
@@ -81,11 +81,7 @@ export default function ChangePassword() {
             {formError}
           </p>
         )}
-        <button
-          type="submit"
-          disabled={busy}
-          className="rounded bg-slate-900 px-4 py-2 text-white hover:bg-slate-700 disabled:opacity-60"
-        >
+        <button type="submit" disabled={busy} className="btn btn-primary">
           {busy ? "Saving…" : "Change password"}
         </button>
       </form>

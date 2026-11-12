@@ -40,14 +40,14 @@ export default function Login() {
     }
   };
 
-  const field = "w-full rounded border border-slate-300 bg-white px-3 py-2";
+  const field = "field";
   return (
     <div className="mx-auto max-w-sm">
-      <h1 className="mb-4 text-2xl font-bold">Sign in</h1>
+      <h1 className="page-title">Sign in</h1>
       <p className="mb-4 text-sm text-slate-700">For committee members and admins.</p>
-      <form onSubmit={submit} className="space-y-4">
+      <form onSubmit={submit} className="panel space-y-4">
         <div>
-          <label htmlFor="email" className="block text-sm font-medium">
+          <label htmlFor="email" className="field-label">
             Email
           </label>
           <input
@@ -60,7 +60,7 @@ export default function Login() {
           />
         </div>
         <div>
-          <label htmlFor="password" className="block text-sm font-medium">
+          <label htmlFor="password" className="field-label">
             Password
           </label>
           <input
@@ -80,11 +80,7 @@ export default function Login() {
             {error}
           </p>
         )}
-        <button
-          type="submit"
-          disabled={busy}
-          className="rounded bg-slate-900 px-4 py-2 text-white hover:bg-slate-700 disabled:opacity-60"
-        >
+        <button type="submit" disabled={busy} className="btn btn-primary">
           {busy ? "Signing in…" : "Sign in"}
         </button>
       </form>

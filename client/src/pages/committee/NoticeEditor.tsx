@@ -42,7 +42,7 @@ export default function NoticeEditor() {
   if (view.state === "gone") {
     return (
       <div>
-        <h1 className="mb-2 text-2xl font-bold">Notice not found</h1>
+        <h1 className="mb-2 font-display text-2xl font-bold">Notice not found</h1>
         {back}
       </div>
     );
@@ -61,7 +61,7 @@ export default function NoticeEditor() {
   if (view.state === "ok" && !view.notice.status) {
     return (
       <div>
-        <h1 className="mb-2 text-2xl font-bold">You can only edit your own notices</h1>
+        <h1 className="mb-2 font-display text-2xl font-bold">You can only edit your own notices</h1>
         {back}
       </div>
     );
@@ -70,7 +70,7 @@ export default function NoticeEditor() {
   return (
     <div>
       <p className="mb-4">{back}</p>
-      <h1 className="mb-4 text-2xl font-bold">{id ? "Edit notice" : "New notice"}</h1>
+      <h1 className="page-title">{id ? "Edit notice" : "New notice"}</h1>
       <NoticeForm
         key={id ?? "new"}
         initial={view.state === "ok" ? view.notice : undefined}
