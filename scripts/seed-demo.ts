@@ -16,7 +16,7 @@ import { User } from "../server/src/models/User.js";
  * Everything demo-made uses the email domain below, so `--reset` can remove exactly that.
  */
 export const DEMO_DOMAIN = "demo.college.test";
-export const DEMO_PASSWORD = "Demo-pass-2026";
+export const DEMO_PASSWORD = "password"; // deliberately weak: demo data is for local use only
 
 const COMMITTEE = [
   "Rohan Deshmukh",
