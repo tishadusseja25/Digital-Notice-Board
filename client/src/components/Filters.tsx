@@ -7,8 +7,8 @@ type Props = {
   onSearch: (next: BoardQuery) => void;
 };
 
-const field = "w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm";
-const label = "block text-sm font-medium text-slate-700";
+const field = "field";
+const label = "field-label";
 
 export default function Filters({ value, categories, onSearch }: Props) {
   const [draft, setDraft] = useState({
@@ -34,9 +34,9 @@ export default function Filters({ value, categories, onSearch }: Props) {
       onSubmit={submit}
       role="search"
       aria-label="Filter notices"
-      className="mb-6 grid gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-2"
+      className="panel mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end"
     >
-      <div className="sm:col-span-2">
+      <div className="sm:col-span-2 lg:col-span-1">
         <label htmlFor="q" className={label}>
           Search
         </label>
@@ -62,7 +62,7 @@ export default function Filters({ value, categories, onSearch }: Props) {
           ))}
         </select>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-3 lg:contents">
         <div>
           <label htmlFor="from" className={label}>
             From
@@ -82,18 +82,11 @@ export default function Filters({ value, categories, onSearch }: Props) {
           <input id="to" type="date" value={draft.to} onChange={set("to")} className={field} />
         </div>
       </div>
-      <div className="flex gap-2 sm:col-span-2">
-        <button
-          type="submit"
-          className="rounded bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-700"
-        >
+      <div className="flex gap-2 sm:col-span-2 lg:col-span-1">
+        <button type="submit" className="btn btn-primary">
           Search
         </button>
-        <button
-          type="button"
-          onClick={clear}
-          className="rounded border border-slate-300 px-4 py-2 text-sm hover:bg-slate-100"
-        >
+        <button type="button" onClick={clear} className="btn btn-quiet">
           Clear
         </button>
       </div>

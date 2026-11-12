@@ -10,8 +10,10 @@ const KEYS = ["q", "category", "from", "to"] as const;
 
 export default function Board() {
   const [params, setParams] = useSearchParams();
-  const { items, total, page, limit, loading, error, categories, load, loadCategories } =
+  const { items, total, page, limit, loading, error, categories, fresh, load, loadCategories } =
     useNoticesStore();
+  const pinned = items.filter((n) => n.pinned);
+  const rest = items.filter((n) => !n.pinned);
 
   // The address bar is the source of truth, so reloads and shared links show the same view.
   const query: BoardQuery = {};
@@ -54,7 +56,7 @@ export default function Board() {
 
   return (
     <div>
-      <h1 className="mb-4 text-2xl font-bold">Latest notices</h1>
+      <h1 className="page-title">Latest notices</h1>
       <Filters
         key={queryKey}
         value={query}
@@ -63,19 +65,39 @@ export default function Board() {
       />
       <div aria-busy={loading}>
         {error && (
-          <p role="alert" className="rounded border border-red-200 bg-red-50 p-4 text-red-800">
+          <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
             {error}{" "}
-            <button type="button" className="underline" onClick={() => void load(query)}>
+            <button
+              type="button"
+              className="font-semibold underline"
+              onClick={() => void load(query)}
+            >
               Try again
             </button>
           </p>
         )}
-        {!error && loading && items.length === 0 && <p>Loading notices…</p>}
-        {!error && !loading && items.length === 0 && <p>No notices match.</p>}
-        {!error && items.length > 0 && (
-          <ul className="grid gap-4 sm:grid-cols-2">
-            {items.map((n) => (
-              <NoticeCard key={n.id} notice={n} />
+        {!error && loading && items.length === 0 && <p className="text-muted">Loading notices…</p>}
+        {!error && !loading && items.length === 0 && (
+          <div className="panel">
+            <p className="font-display text-xl font-bold">No notices match.</p>
+            <p className="mt-1 text-muted">
+              Try a different word, or clear the filters to see everything.
+            </p>
+          </div>
+        )}
+        {!error && pinned.length > 0 && (
+          <section aria-label="Pinned notices" className="mb-8">
+            <ul className="grid gap-4 md:grid-cols-3">
+              {pinned.map((n) => (
+                <NoticeCard key={n.id} notice={n} variant="feature" fresh={fresh.includes(n.id)} />
+              ))}
+            </ul>
+          </section>
+        )}
+        {!error && rest.length > 0 && (
+          <ul className="overflow-hidden rounded-lg border border-line bg-white">
+            {rest.map((n) => (
+              <NoticeCard key={n.id} notice={n} fresh={fresh.includes(n.id)} />
             ))}
           </ul>
         )}

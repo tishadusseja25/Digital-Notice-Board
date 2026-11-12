@@ -33,6 +33,8 @@ type NoticesState = {
   loading: boolean;
   error: string | null;
   categories: Category[];
+  /** Ids of notices that just arrived by a live update (cleared after a few seconds). */
+  fresh: string[];
   /** `silent` keeps the current list on screen (no spinner, no error) for live refreshes. */
   load: (query: BoardQuery, silent?: boolean) => Promise<void>;
   /** Live update: reloads the current view once, however many events arrive close together. */
@@ -46,6 +48,7 @@ type NoticesState = {
 let latest = 0;
 let lastQuery: BoardQuery = {};
 let reloadTimer: ReturnType<typeof setTimeout> | undefined;
+export const FRESH_MS = 8000;
 
 export const useNoticesStore = create<NoticesState>((set, get) => ({
   items: [],
@@ -55,6 +58,7 @@ export const useNoticesStore = create<NoticesState>((set, get) => ({
   loading: true,
   error: null,
   categories: [],
+  fresh: [],
 
   async load(query, silent = false) {
     const id = ++latest;
@@ -65,7 +69,19 @@ export const useNoticesStore = create<NoticesState>((set, get) => ({
         "/notices",
         { query },
       );
-      if (id === latest) set({ ...data, loading: false });
+      if (id === latest) {
+        // A live refresh that brings notices the page did not have marks them as new for a moment.
+        const seen = new Set(get().items.map((n) => n.id));
+        const arrived =
+          silent && seen.size > 0 ? data.items.filter((n) => !seen.has(n.id)).map((n) => n.id) : [];
+        set({ ...data, loading: false, fresh: [...get().fresh, ...arrived] });
+        if (arrived.length > 0) {
+          setTimeout(
+            () => set({ fresh: get().fresh.filter((x) => !arrived.includes(x)) }),
+            FRESH_MS,
+          );
+        }
+      }
     } catch {
       if (id === latest) set(silent ? {} : { loading: false, error: "Could not load notices." });
     }

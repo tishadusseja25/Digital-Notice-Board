@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { lastSocket, sockets } from "./fakeSocket";
 import { useLiveStore } from "./lib/socket";
-import { useNoticesStore, type Notice } from "./store/noticesStore";
+import { FRESH_MS, useNoticesStore, type Notice } from "./store/noticesStore";
 import { useSessionStore, type User } from "./store/sessionStore";
 import { calls, json, stubFetch, user } from "./testUtils";
 
@@ -51,7 +51,7 @@ const listCalls = (m: ReturnType<typeof stubFetch>) =>
 beforeEach(() => {
   useSessionStore.setState({ user: null, status: "loading" });
   useLiveStore.setState({ status: "connecting" });
-  useNoticesStore.setState({ items: [], total: 0, loading: true, error: null });
+  useNoticesStore.setState({ items: [], total: 0, loading: true, error: null, fresh: [] });
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -163,6 +163,34 @@ describe("live board", () => {
     expect(screen.queryByText("Notice 1")).not.toBeInTheDocument();
     expect(screen.getByText("Notice 2")).toBeInTheDocument();
   });
+});
+
+describe("fresh highlight", () => {
+  it("marks a notice that arrives live as new, and clears the mark after a few seconds", async () => {
+    let items = [notice(1)];
+    server(() => page(items));
+    renderApp();
+    const s = await connectedSocket();
+    await screen.findByText("Notice 1");
+    expect(useNoticesStore.getState().fresh).toEqual([]); // nothing is new on the first load
+
+    items = [notice(2), notice(1)];
+    act(() => s.trigger("notice:created", { id: "id2" }));
+    await screen.findByText("Notice 2");
+    expect(useNoticesStore.getState().fresh).toEqual(["id2"]);
+    const row = screen.getByRole("heading", { name: "Notice 2" }).closest("li");
+    expect(row).toHaveAttribute("data-fresh", "true");
+    expect(screen.getByRole("heading", { name: "Notice 1" }).closest("li")).not.toHaveAttribute(
+      "data-fresh",
+    );
+
+    await waitFor(() => expect(useNoticesStore.getState().fresh).toEqual([]), {
+      timeout: FRESH_MS + 2000,
+    });
+    expect(screen.getByRole("heading", { name: "Notice 2" }).closest("li")).not.toHaveAttribute(
+      "data-fresh",
+    );
+  }, 20_000);
 });
 
 describe("live detail and My notices", () => {

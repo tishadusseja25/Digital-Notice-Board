@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ApiError, api } from "../lib/api";
+import { categoryStyle } from "../lib/category";
 import { formatDateTime } from "../lib/format";
 import { subscribeLive } from "../lib/socket";
 import type { Notice } from "../store/noticesStore";
@@ -36,24 +37,30 @@ export default function NoticeDetail() {
   );
 
   const back = (
-    <Link to="/" className="underline">
+    <Link to="/" className="font-semibold text-signal underline">
       Back to the notice board
     </Link>
   );
 
-  if (view.state === "loading") return <p aria-busy="true">Loading notice…</p>;
+  if (view.state === "loading")
+    return (
+      <p aria-busy="true" className="text-muted">
+        Loading notice…
+      </p>
+    );
   if (view.state === "gone") {
     return (
-      <div>
-        <h1 className="mb-2 text-2xl font-bold">This notice is no longer available</h1>
+      <div className="panel max-w-xl">
+        <h1 className="mb-2 font-display text-2xl font-bold">This notice is no longer available</h1>
+        <p className="mb-4 text-muted">It may have expired or been taken down by the committee.</p>
         {back}
       </div>
     );
   }
   if (view.state === "error") {
     return (
-      <div>
-        <p role="alert" className="mb-2">
+      <div className="panel max-w-xl">
+        <p role="alert" className="mb-3 font-semibold">
           Could not load this notice.
         </p>
         {back}
@@ -62,20 +69,19 @@ export default function NoticeDetail() {
   }
 
   const { notice } = view;
+  const style = categoryStyle(notice.category.name);
   return (
     <article>
-      <p className="mb-4">{back}</p>
-      <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
-        <span className="rounded bg-slate-100 px-2 py-0.5 text-slate-700">
-          {notice.category.name}
-        </span>
-        <time dateTime={notice.publishedAt ?? undefined} className="text-slate-600">
+      <p className="mb-6 text-sm">{back}</p>
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <span className={`badge ${style.chip}`}>{notice.category.name}</span>
+        <time dateTime={notice.publishedAt ?? undefined} className="text-sm text-muted">
           {formatDateTime(notice.publishedAt)}
         </time>
       </div>
-      <h1 className="mb-4 text-2xl font-bold">{notice.title}</h1>
-      <p className="mb-6 whitespace-pre-line">{notice.body}</p>
-      <div className="space-y-4">
+      <h1 className="mb-6 max-w-3xl font-display text-3xl font-bold sm:text-5xl">{notice.title}</h1>
+      <p className="mb-8 max-w-prose whitespace-pre-line text-lg leading-relaxed">{notice.body}</p>
+      <div className="space-y-6">
         {notice.images.map((image) => (
           // Original file, scaled only by CSS so quality is never reduced.
           <img
@@ -83,7 +89,7 @@ export default function NoticeDetail() {
             src={`/api/images/${image.id}`}
             alt={image.alt}
             loading="lazy"
-            className="h-auto max-w-full rounded border border-slate-200"
+            className="h-auto max-w-full rounded-lg border border-line"
           />
         ))}
       </div>
