@@ -1,12 +1,12 @@
+import { categoryStyle } from "../../lib/category";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { ApiError, api } from "../../lib/api";
 
 type Category = { id: string; name: string };
 type Pending = { id: string; kind: "rename" | "delete" } | null;
 
-const input = "rounded border border-slate-300 bg-white px-3 py-2 text-sm";
-const button =
-  "rounded border border-slate-300 bg-white px-3 py-1 text-sm hover:bg-slate-100 disabled:opacity-50";
+const input = "field w-auto";
+const button = "btn btn-quiet px-3 py-1";
 
 const messageFor = (err: unknown) => {
   if (err instanceof ApiError) return (err.fields && Object.values(err.fields)[0]) ?? err.message;
@@ -57,7 +57,7 @@ export default function AdminCategories() {
 
   return (
     <div>
-      <h1 className="mb-4 text-2xl font-bold">Categories</h1>
+      <h1 className="page-title">Categories</h1>
       {error && (
         <p role="alert" className="mb-4 rounded border border-red-200 bg-red-50 p-3 text-red-800">
           {error}
@@ -70,16 +70,12 @@ export default function AdminCategories() {
         className="mb-6 flex flex-wrap items-end gap-2"
       >
         <div>
-          <label htmlFor="new-category" className="block text-sm font-medium">
+          <label htmlFor="new-category" className="field-label">
             New category
           </label>
           <input id="new-category" name="name" required maxLength={40} className={input} />
         </div>
-        <button
-          type="submit"
-          disabled={busy}
-          className="rounded bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-700 disabled:opacity-60"
-        >
+        <button type="submit" disabled={busy} className="btn btn-primary">
           Add
         </button>
       </form>
@@ -93,7 +89,7 @@ export default function AdminCategories() {
             return (
               <li
                 key={c.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white p-3"
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-white p-3"
               >
                 {open === "rename" ? (
                   <form
@@ -108,7 +104,7 @@ export default function AdminCategories() {
                     }}
                   >
                     <div>
-                      <label htmlFor={`rename-${c.id}`} className="block text-sm font-medium">
+                      <label htmlFor={`rename-${c.id}`} className="field-label">
                         New name for {c.name}
                       </label>
                       <input
@@ -129,14 +125,20 @@ export default function AdminCategories() {
                   </form>
                 ) : (
                   <>
-                    <span className="font-medium">{c.name}</span>
+                    <span className="flex items-center gap-2 font-semibold">
+                      <span
+                        aria-hidden="true"
+                        className={`h-3 w-3 rounded-full ${categoryStyle(c.name).bar}`}
+                      />
+                      {c.name}
+                    </span>
                     <div className="flex gap-2">
                       {open === "delete" ? (
                         <>
                           <button
                             type="button"
                             disabled={busy}
-                            className="rounded bg-red-700 px-3 py-1 text-sm text-white hover:bg-red-800 disabled:opacity-50"
+                            className="btn bg-cat-red px-3 py-1 text-white hover:opacity-90"
                             onClick={() =>
                               void run(
                                 () => api(`/categories/${c.id}`, { method: "DELETE" }),

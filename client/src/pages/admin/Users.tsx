@@ -19,11 +19,9 @@ type Page = { items: AdminUser[]; total: number; page: number; limit: number };
 type Pending = { id: string; kind: "disable" | "role" | "reset" } | null;
 
 const MIN_PASSWORD = 10;
-const input = "w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm";
-const button =
-  "rounded border border-slate-300 bg-white px-3 py-1 text-sm hover:bg-slate-100 disabled:opacity-50";
-const danger =
-  "rounded bg-red-700 px-3 py-1 text-sm text-white hover:bg-red-800 disabled:opacity-50";
+const input = "field";
+const button = "btn btn-quiet px-3 py-1";
+const danger = "btn bg-cat-red px-3 py-1 text-white hover:opacity-90";
 
 const messageFor = (err: unknown) => {
   if (err instanceof ApiError) {
@@ -106,7 +104,7 @@ export default function AdminUsers() {
 
   return (
     <div>
-      <h1 className="mb-4 text-2xl font-bold">Users</h1>
+      <h1 className="page-title">Users</h1>
 
       {notice && (
         <p className="mb-4 rounded border border-green-200 bg-green-50 p-3 text-green-900">
@@ -122,25 +120,25 @@ export default function AdminUsers() {
       <form
         onSubmit={create}
         aria-label="Create user"
-        className="mb-8 grid gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-2"
+        className="panel mb-8 grid gap-3 sm:grid-cols-2"
       >
-        <h2 className="text-lg font-semibold sm:col-span-2">Create an account</h2>
+        <h2 className="font-display text-xl font-bold sm:col-span-2">Create an account</h2>
         <div>
-          <label htmlFor="new-name" className="block text-sm font-medium">
+          <label htmlFor="new-name" className="field-label">
             Name
           </label>
           <input id="new-name" name="name" required maxLength={80} className={input} />
           {createError("name")}
         </div>
         <div>
-          <label htmlFor="new-email" className="block text-sm font-medium">
+          <label htmlFor="new-email" className="field-label">
             Email
           </label>
           <input id="new-email" name="email" type="email" required className={input} />
           {createError("email")}
         </div>
         <div>
-          <label htmlFor="new-role" className="block text-sm font-medium">
+          <label htmlFor="new-role" className="field-label">
             Role
           </label>
           <select id="new-role" name="role" defaultValue="committee" className={input}>
@@ -149,7 +147,7 @@ export default function AdminUsers() {
           </select>
         </div>
         <div>
-          <label htmlFor="new-password" className="block text-sm font-medium">
+          <label htmlFor="new-password" className="field-label">
             Temporary password
           </label>
           <input
@@ -164,11 +162,7 @@ export default function AdminUsers() {
           {createError("password")}
         </div>
         <div className="sm:col-span-2">
-          <button
-            type="submit"
-            disabled={busy}
-            className="rounded bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-700 disabled:opacity-60"
-          >
+          <button type="submit" disabled={busy} className="btn btn-primary">
             Create account
           </button>
         </div>
@@ -184,22 +178,24 @@ export default function AdminUsers() {
             return (
               <li key={u.id} className="rounded-lg border border-slate-200 bg-white p-4">
                 <div className="mb-1 flex flex-wrap items-center gap-2 text-xs">
-                  <span className="rounded bg-slate-100 px-2 py-0.5 font-semibold capitalize">
+                  <span
+                    className={`badge capitalize ${u.role === "admin" ? "bg-cat-violet-tint text-cat-violet" : "bg-cat-teal-tint text-cat-teal"}`}
+                  >
                     {u.role}
                   </span>
                   <span
-                    className={`rounded px-2 py-0.5 font-semibold ${u.active ? "bg-green-100 text-green-900" : "bg-red-100 text-red-900"}`}
+                    className={`badge ${u.active ? "bg-cat-green-tint text-cat-green" : "bg-cat-red-tint text-cat-red"}`}
                   >
                     {u.active ? "Active" : "Disabled"}
                   </span>
                   {u.mustChangePassword && (
-                    <span className="rounded bg-amber-100 px-2 py-0.5 font-semibold text-amber-900">
+                    <span className="badge bg-cat-orange-tint text-cat-orange">
                       Must change password
                     </span>
                   )}
                   {self && <span className="text-slate-600">(you)</span>}
                 </div>
-                <h2 className="font-semibold">{u.name}</h2>
+                <h2 className="font-display text-lg font-bold">{u.name}</h2>
                 <p className="mb-3 text-sm text-slate-700">
                   {u.email}
                   {u.createdAt && ` · created ${formatDateTime(u.createdAt)}`}
@@ -222,7 +218,7 @@ export default function AdminUsers() {
                     }}
                   >
                     <div>
-                      <label htmlFor={`reset-${u.id}`} className="block text-sm font-medium">
+                      <label htmlFor={`reset-${u.id}`} className="field-label">
                         New temporary password for {u.name}
                       </label>
                       <input

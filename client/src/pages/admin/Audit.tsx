@@ -41,7 +41,7 @@ export default function AdminAudit() {
 
   return (
     <div>
-      <h1 className="mb-4 text-2xl font-bold">Audit log</h1>
+      <h1 className="page-title">Audit log</h1>
       <p className="mb-4 text-sm text-slate-700">
         Newest first. Entries are kept for one year and cannot be changed.
       </p>
@@ -56,10 +56,10 @@ export default function AdminAudit() {
       {!data && !error && <p>Loading…</p>}
       {data && data.items.length === 0 && <p>Nothing has been logged yet.</p>}
       {data && data.items.length > 0 && (
-        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+        <div className="overflow-x-auto rounded-lg border border-line bg-white">
           <table className="w-full text-left text-sm">
             <caption className="sr-only">Audit log entries</caption>
-            <thead className="bg-slate-100 text-xs uppercase text-slate-700">
+            <thead className="bg-paper-2 text-xs font-semibold text-muted">
               <tr>
                 <th scope="col" className="px-3 py-2">
                   When
