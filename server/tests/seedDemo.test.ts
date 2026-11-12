@@ -10,10 +10,10 @@ describe("demo seed", () => {
   afterEach(clearTestDb);
   afterAll(disconnectTestDb);
 
-  it("creates admins, committee members, categories and notices in every state", async () => {
+  it("creates committee members, categories and notices in every state, and no admin", async () => {
     const r = await seedDemo({ notices: 60, bcryptCost: 4 });
     expect(r.skipped).toBe(false);
-    expect(await User.countDocuments({ role: "admin" })).toBe(3);
+    expect(await User.countDocuments({ role: "admin" })).toBe(0);
     expect(await User.countDocuments({ role: "committee" })).toBe(14);
     expect(await User.countDocuments({ active: false })).toBe(1);
     expect(await Notice.countDocuments()).toBe(60);
@@ -42,9 +42,9 @@ describe("demo seed", () => {
     expect(poster(10, 1).subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
   });
 
-  it("lets a demo admin and a demo committee member sign in with the shared password", async () => {
+  it("lets demo committee members sign in with the shared password", async () => {
     await seedDemo({ notices: 10, bcryptCost: 4 });
-    for (const email of [`meera.iyer@${DEMO_DOMAIN}`, `rohan.deshmukh@${DEMO_DOMAIN}`]) {
+    for (const email of [`rohan.deshmukh@${DEMO_DOMAIN}`, `priya.menon@${DEMO_DOMAIN}`]) {
       const res = await makeAgent()
         .post("/api/auth/login")
         .send({ email, password: DEMO_PASSWORD });
@@ -66,6 +66,6 @@ describe("demo seed", () => {
     expect(again.skipped).toBe(false);
     expect(await Notice.countDocuments()).toBe(25);
     expect(await User.countDocuments({ email: "real@example.com" })).toBe(1);
-    expect(await User.countDocuments({ email: new RegExp(DEMO_DOMAIN) })).toBe(17);
+    expect(await User.countDocuments({ email: new RegExp(DEMO_DOMAIN) })).toBe(14);
   });
 });

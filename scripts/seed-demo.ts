@@ -10,15 +10,14 @@ import { AuditLog } from "../server/src/models/AuditLog.js";
 import { User } from "../server/src/models/User.js";
 
 /**
- * Fills the database with demo people and notices so the board looks lived in: 3 admins,
- * 14 committee members, 10 categories, about 180 notices in every state (published, expiring soon,
+ * Fills the database with demo people and notices so the board looks lived in: 14 committee
+ * members (no admin: the one admin is the account created by `npm run seed`), 10 categories, about 180 notices in every state (published, expiring soon,
  * expired, draft, archived, pinned) and generated poster images stored in GridFS.
  * Everything demo-made uses the email domain below, so `--reset` can remove exactly that.
  */
 export const DEMO_DOMAIN = "demo.college.test";
 export const DEMO_PASSWORD = "Demo-pass-2026";
 
-const ADMINS = ["Meera Iyer", "Arjun Nair", "Sana Qureshi"];
 const COMMITTEE = [
   "Rohan Deshmukh",
   "Priya Menon",
@@ -341,10 +340,7 @@ export async function seedDemo({
 
   const c: Ctx = { r: rng(2026), now };
   const passwordHash = await bcrypt.hash(DEMO_PASSWORD, bcryptCost);
-  const people = [
-    ...ADMINS.map((name) => ({ name, role: "admin" as const })),
-    ...COMMITTEE.map((name) => ({ name, role: "committee" as const })),
-  ].map((p) => ({
+  const people = COMMITTEE.map((name) => ({ name, role: "committee" as const })).map((p) => ({
     ...p,
     email: `${slug(p.name)}@${DEMO_DOMAIN}`,
     passwordHash,
@@ -474,7 +470,6 @@ export async function seedDemo({
   const count = (s: string) => docs.filter((d) => d.status === s).length;
   return {
     skipped: false as const,
-    admins: ADMINS.length,
     committee: COMMITTEE.length,
     categories: CATEGORIES.length,
     notices: docs.length,
@@ -500,15 +495,13 @@ async function main() {
   if (r.skipped) {
     console.log("Demo data already exists. Run with --reset to replace it.");
   } else {
-    console.log(
-      `Demo data created: ${r.admins} admins, ${r.committee} committee members, ${r.categories} categories,`,
-    );
+    console.log(`Demo data created: ${r.committee} committee members, ${r.categories} categories,`);
     console.log(
       `${r.notices} notices (${r.published} published, ${r.drafts} drafts, ${r.archived} archived, ${r.pinned} pinned), ${r.images} images.`,
     );
-    console.log(`Sign in with any email below using the password ${DEMO_PASSWORD}:`);
-    console.log(`  admin:     ${slug(ADMINS[0]!)}@${DEMO_DOMAIN}`);
-    console.log(`  committee: ${slug(COMMITTEE[0]!)}@${DEMO_DOMAIN}`);
+    console.log(`Committee members sign in with the password ${DEMO_PASSWORD}, for example:`);
+    console.log(`  ${slug(COMMITTEE[0]!)}@${DEMO_DOMAIN}`);
+    console.log("The only admin is the account created by `npm run seed`.");
   }
   await mongoose.disconnect();
 }
