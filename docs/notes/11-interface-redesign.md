@@ -39,3 +39,5 @@
 - **Small details:** per-page tab titles through `lib/useTitle.ts` ("Users · Digital Notice Board"), an SVG favicon (`client/public/favicon.svg`) plus description and theme colour in `index.html`, scroll to top on route change (`ScrollToTop` in `App.tsx`; `window.scrollTo` is stubbed in `setupTests.ts` because jsdom does not implement it), a "Show password" checkbox on sign-in, and the live pill is invisible (not removed) while the socket is still connecting, so the `aria-live` region stays in place.
 - **e2e:** `getByLabel("Password")` now also matches "Show password", so the sign-in helper uses `{ exact: true }`.
 - **One admin.** The demo seed no longer creates admins; the single admin is the account from `npm run seed`.
+
+- **Header on phones.** The wordmark link shows only the board icon below `sm` (the name is `aria-label` on the link and the visible text is `hidden sm:inline`), so the header stays on one line with the Live pill and the account links. From `sm` up the icon and the full name are shown.
